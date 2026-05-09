@@ -1,0 +1,6 @@
+Dataset/
+Standard_Dataset/
+__pycache__/
+.vscode/
+*.mp4
+*.avi
