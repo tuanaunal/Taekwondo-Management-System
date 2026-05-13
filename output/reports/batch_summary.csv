@@ -1,0 +1,21 @@
+﻿video,true_label,predicted,label_tr,confidence,graph_path
+GH_01,Ghost_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.9038461538461539,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\GH_01_-_Kask_Kinematiği.png
+GH_02,Ghost_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.8525641025641025,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\GH_02_-_Kask_Kinematiği.png
+GH_03,Ghost_Hit,EXTERNAL_FACTOR,Dış Etken / Aktif Kaçış,0.6,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\GH_03_-_Kask_Kinematiği.png
+GH_04,Ghost_Hit,EXTERNAL_FACTOR,Dış Etken / Aktif Kaçış,0.6,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\GH_04_-_Kask_Kinematiği.png
+GH_05,Ghost_Hit,EXTERNAL_FACTOR,Dış Etken / Aktif Kaçış,0.6,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\GH_05_-_Kask_Kinematiği.png
+GH_06,Ghost_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.7884615384615384,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\GH_06_-_Kask_Kinematiği.png
+GH_07,Ghost_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.7564102564102564,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\GH_07_-_Kask_Kinematiği.png
+GH_08,Ghost_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.7948717948717949,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\GH_08_-_Kask_Kinematiği.png
+GH_09,Ghost_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.8461538461538461,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\GH_09_-_Kask_Kinematiği.png
+GH_10,Ghost_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.9487179487179487,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\GH_10_-_Kask_Kinematiği.png
+RH_01,Real_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.7628205128205128,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\RH_01_-_Kask_Kinematiği.png
+RH_02,Real_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.7884615384615384,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\RH_02_-_Kask_Kinematiği.png
+RH_03,Real_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.8076923076923077,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\RH_03_-_Kask_Kinematiği.png
+RH_04,Real_Hit,EXTERNAL_FACTOR,Dış Etken / Aktif Kaçış,0.6,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\RH_04_-_Kask_Kinematiği.png
+RH_05,Real_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.7884615384615384,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\RH_05_-_Kask_Kinematiği.png
+RH_06,Real_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.9358974358974359,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\RH_06_-_Kask_Kinematiği.png
+RH_07,Real_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.7628205128205128,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\RH_07_-_Kask_Kinematiği.png
+RH_08,Real_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.8269230769230769,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\RH_08_-_Kask_Kinematiği.png
+RH_09,Real_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.8397435897435898,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\RH_09_-_Kask_Kinematiği.png
+RH_10,Real_Hit,REAL_HIT,Gerçek Darbe (Real Hit),0.8525641025641025,C:\Users\Tuana\OneDrive\Desktop\Taekwondo_Project\output\graphs\RH_10_-_Kask_Kinematiği.png
