@@ -201,12 +201,31 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
     }
 
 
+def launch_gui():
+    """PyQt5 GUI arayuzunu baslatir."""
+    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtGui import QFont
+    from gui.main_window import MainWindow
+
+    app = QApplication(sys.argv)
+    app.setFont(QFont("Segoe UI", 10))
+    app.setStyle("Fusion")
+
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec_())
+
+
 def main():
-    """CLI giris noktasi."""
+    """
+    Giris noktasi.
+    - Arguman verilmezse: GUI arayuzu acilir
+    - Arguman verilirse: CLI modunda tek video analiz edilir
+    """
     if len(sys.argv) < 2:
-        print("Kullanim: python main.py <video_yolu>")
-        print("Ornek:    python main.py Dataset/Ghost_Hit/GH_01.mp4")
-        sys.exit(1)
+        # Arguman yoksa direkt GUI ac
+        launch_gui()
+        return
 
     video_path = sys.argv[1]
 
