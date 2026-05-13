@@ -1,6 +1,37 @@
-Dataset/
-Standard_Dataset/
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+venv/
+env/
+.env/
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Output files (generated during analysis)
+output/logs/*.csv
+output/graphs/*.png
+output/reports/*.csv
+output/reports/*.txt
+
+# Video files (too large for git)
+Raw_Videos/*.mp4
+Dataset/Ghost_Hit/*.mp4
+Dataset/Real_Hit/*.mp4
 *.mp4
-*.avi
