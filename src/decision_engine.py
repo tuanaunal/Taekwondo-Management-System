@@ -94,6 +94,17 @@ class DecisionEngine:
         contact_ratio = contact_summary.get("contact_ratio", 0.0)
         max_overlap = contact_summary.get("max_overlap", 0)
         min_distance = contact_summary.get("min_distance", float("inf"))
+        near_miss_frames = contact_summary.get("near_miss_frames", 0)
+        total_frames = contact_summary.get("total_frames", 1)
+
+        # Near miss oranı — overlap olmasa bile yakın geçiş temas kanıtıdır
+        near_miss_ratio = near_miss_frames / max(total_frames, 1)
+        # Etkili temas oranı: overlap + near miss'in yarısı
+        effective_contact_ratio = contact_ratio + near_miss_ratio * 0.5
+
+        # Eğer etkili temas oranı %15'i aşıyorsa, temas var kabul et
+        if not has_contact and effective_contact_ratio > 0.15:
+            has_contact = True
 
         motion_type = kinematic_result.get("type", "stationary")
         motion_confidence = kinematic_result.get("confidence", 0.0)
@@ -101,7 +112,7 @@ class DecisionEngine:
 
         # Temas skoru (0: temas yok, 1: güçlü temas)
         if has_contact:
-            contact_score = min(1.0, 0.5 + contact_ratio * 0.5)
+            contact_score = min(1.0, 0.4 + effective_contact_ratio * 0.6)
         elif min_distance < 50:
             contact_score = 0.3 * (1.0 - min_distance / 50.0)
         else:

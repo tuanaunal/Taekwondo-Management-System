@@ -12,7 +12,7 @@ from src.config import (
     HSV_RANGES,
     MORPH_KERNEL_SIZE, MORPH_ERODE_ITERATIONS,
     MORPH_DILATE_ITERATIONS, MORPH_CLOSE_ITERATIONS,
-    MIN_CONTOUR_AREA,
+    MIN_CONTOUR_AREA, MAX_CONTOUR_AREA,
 )
 
 
@@ -129,12 +129,13 @@ class EquipmentSegmentor:
         self, mask: np.ndarray, frame: np.ndarray
     ) -> tuple:
         """
-        Aynı renkteki kask ve ayak koruyucuyu konum bazlı ayırır.
+        Aynı renkteki kask ve ayak koruyucuyu konum ve boyut bazlı ayırır.
 
         Mantık:
           - Kask genellikle karenin üst yarısında
           - Ayak koruyucu genellikle karenin alt yarısında
-          - Aynı yarıda birden fazla nesne varsa, en büyük alanı olanı seç
+          - MIN_CONTOUR_AREA ve MAX_CONTOUR_AREA filtresi uygulanır
+          - Aspect ratio kontrolü: kask yuvarlak, ayak uzun
 
         Returns
         -------
@@ -156,8 +157,16 @@ class EquipmentSegmentor:
 
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if area < MIN_CONTOUR_AREA:
+
+            # Boyut filtreleme: çok küçük veya çok büyük konturları reddet
+            if area < MIN_CONTOUR_AREA or area > MAX_CONTOUR_AREA:
                 continue
+
+            # Aspect ratio kontrolü
+            x, y, bw, bh = cv2.boundingRect(cnt)
+            if bh == 0:
+                continue
+            aspect_ratio = bw / bh
 
             M = cv2.moments(cnt)
             if M["m00"] == 0:
@@ -165,8 +174,12 @@ class EquipmentSegmentor:
             cy = int(M["m01"] / M["m00"])
 
             if cy < mid_y:
-                upper_contours.append((cnt, area))
+                # Üst yarı: Kask adayı
+                # Kask genellikle yuvarlak/oval: aspect ratio 0.4 - 2.5
+                if 0.3 <= aspect_ratio <= 3.0:
+                    upper_contours.append((cnt, area))
             else:
+                # Alt yarı: Ayak koruyucu adayı
                 lower_contours.append((cnt, area))
 
         # Üst yarıdaki en büyük kontur → kask
@@ -207,7 +220,7 @@ class EquipmentSegmentor:
 
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if area < MIN_CONTOUR_AREA:
+            if area < MIN_CONTOUR_AREA or area > MAX_CONTOUR_AREA:
                 continue
 
             valid_contours.append(cnt)

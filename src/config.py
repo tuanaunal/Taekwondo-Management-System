@@ -51,24 +51,24 @@ MEDIAN_KERNEL_SIZE = 5
 
 HSV_RANGES = {
     # ── KIRMIZI KASK (Hogu) ──
-    "red_helmet_lower1": np.array([0, 80, 80]),
-    "red_helmet_upper1": np.array([12, 255, 255]),
-    "red_helmet_lower2": np.array([165, 80, 80]),
+    "red_helmet_lower1": np.array([0, 100, 100]),
+    "red_helmet_upper1": np.array([10, 255, 255]),
+    "red_helmet_lower2": np.array([168, 100, 100]),
     "red_helmet_upper2": np.array([180, 255, 255]),
 
     # ── MAVİ KASK (Hogu) ──
-    "blue_helmet_lower": np.array([95, 80, 60]),
-    "blue_helmet_upper": np.array([135, 255, 255]),
+    "blue_helmet_lower": np.array([100, 120, 80]),
+    "blue_helmet_upper": np.array([125, 255, 255]),
 
     # ── KIRMIZI AYAK KORUYUCU ──
-    "red_foot_lower1": np.array([0, 80, 80]),
-    "red_foot_upper1": np.array([12, 255, 255]),
-    "red_foot_lower2": np.array([165, 80, 80]),
+    "red_foot_lower1": np.array([0, 100, 100]),
+    "red_foot_upper1": np.array([10, 255, 255]),
+    "red_foot_lower2": np.array([168, 100, 100]),
     "red_foot_upper2": np.array([180, 255, 255]),
 
     # ── MAVİ AYAK KORUYUCU ──
-    "blue_foot_lower": np.array([95, 80, 60]),
-    "blue_foot_upper": np.array([135, 255, 255]),
+    "blue_foot_lower": np.array([100, 120, 80]),
+    "blue_foot_upper": np.array([125, 255, 255]),
 }
 
 # ──────────────────────────────────────────────
@@ -79,8 +79,13 @@ MORPH_ERODE_ITERATIONS = 1
 MORPH_DILATE_ITERATIONS = 2
 MORPH_CLOSE_ITERATIONS = 2
 
-# Minimum kontur alanı (piksel²) — sahte tespitleri filtrele
+# Minimum kontur alanı (piksel²) — küçük gürültüleri filtrele
 MIN_CONTOUR_AREA = 500
+
+# Maksimum kontur alanı (piksel²) — devasa sahte tespitleri filtrele
+# Gerçek kask: ~15,000-30,000 px², gerçek ayak: ~3,000-20,000 px²
+# Bu değerin üzerindeki konturlar zemin/arka plan olarak kabul edilir
+MAX_CONTOUR_AREA = 80000
 
 # ──────────────────────────────────────────────
 # 6. KİNEMATİK ANALİZ EŞİKLERİ
@@ -99,14 +104,16 @@ EVASION_SMOOTHNESS_THRESHOLD = 0.6   # İvme varyasyon katsayısı eşiği
 # 7. TEMAS ANALİZİ EŞİKLERİ
 # ──────────────────────────────────────────────
 # Piksel bazlı çakışma eşiği — bu kadar piksel çakışırsa temas VAR
-CONTACT_OVERLAP_THRESHOLD = 5
+# Not: Segmentasyon düzeltildikten sonra 20px yeterli hassasiyet sağlıyor
+CONTACT_OVERLAP_THRESHOLD = 20
 
 # Öklid mesafesi eşiği (piksel) — merkezler arası
 # Bu mesafeden yakınsa "yakın geçiş" (near miss), değilse "temas yok"
 PROXIMITY_THRESHOLD = 80
 
 # Kontur sınır mesafesi eşiği (piksel)
-CONTOUR_DISTANCE_THRESHOLD = 30
+# 20px içindeyse "yakın geçiş" (near miss)
+CONTOUR_DISTANCE_THRESHOLD = 20
 
 # ──────────────────────────────────────────────
 # 8. ROI (Region of Interest) AYARLARI
