@@ -9,9 +9,9 @@ Layout:
   ├──────────────┬──────────────────────┬───────────────┤
   │  Sol Panel   │   Orta Panel         │  Sağ Panel    │
   │  - Dosya Aç  │   - Video Oynatıcı   │  - Karar      │
-  │  - Video     │                      │  - Grafikler  │
-  │    Listesi   │                      │  - Log Tablo  │
-  │  - Bilgi     │                      │  - Rapor      │
+  │  - Analiz    │   - Zoom/Hız         │  - Grafikler  │
+  │  - Bilgi     │                      │  - Log Tablo  │
+  │              │                      │  - Rapor      │
   └──────────────┴──────────────────────┴───────────────┘
 """
 
@@ -181,7 +181,7 @@ class MainWindow(QMainWindow):
         # ── Splitter (3 Panel) ──
         splitter = QSplitter(Qt.Horizontal)
 
-        # ────────── SOL PANEL ──────────
+        # ────────── SOL PANEL (Sadeleştirilmiş) ──────────
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -277,39 +277,34 @@ class MainWindow(QMainWindow):
             info_layout.addLayout(row)
         left_layout.addWidget(info_box)
 
-        # Dataset hızlı erişim
-        dataset_box = QGroupBox("DATASET")
-        dataset_layout = QVBoxLayout(dataset_box)
-
-        self.video_list = QListWidget()
-        self.video_list.setStyleSheet("""
-            QListWidget {
-                background-color: #161b22;
-                border: 1px solid #21262d;
-                border-radius: 6px;
-                font-size: 11px;
-            }
-            QListWidget::item {
-                padding: 6px 10px;
-                border-bottom: 1px solid #21262d;
-            }
-            QListWidget::item:selected {
-                background-color: #1f6feb;
-                color: white;
-            }
-            QListWidget::item:hover {
-                background-color: #161b22;
-                border-left: 3px solid #e94560;
-            }
+        # Kullanım kılavuzu
+        guide_box = QGroupBox("KULLANIM")
+        guide_layout = QVBoxLayout(guide_box)
+        guide_text = QLabel(
+            "1. Video dosyasını açın\n"
+            "2. Videoyu izleyip inceleyin\n"
+            "   • Zoom: Mouse tekerleği\n"
+            "   • Pan: Sürükle (zoom'da)\n"
+            "   • Hız: Alt kontroller\n"
+            "3. Analizi başlatın\n"
+            "4. Sonuçları inceleyin"
+        )
+        guide_text.setWordWrap(True)
+        guide_text.setStyleSheet("""
+            color: #8b949e;
+            font-size: 11px;
+            padding: 5px;
+            line-height: 1.4;
         """)
-        self.video_list.itemDoubleClicked.connect(self._on_list_item_clicked)
-        self._populate_video_list()
-        dataset_layout.addWidget(self.video_list)
+        guide_layout.addWidget(guide_text)
+        left_layout.addWidget(guide_box)
 
-        left_layout.addWidget(dataset_box, 1)
-        left_panel.setMaximumWidth(300)
+        # Alt boşluk — sol paneli yukarı topla
+        left_layout.addStretch()
 
-        # ────────── ORTA PANEL ──────────
+        left_panel.setMaximumWidth(280)
+
+        # ────────── ORTA PANEL (Video — Büyütülmüş) ──────────
         self.video_player = VideoPlayerWidget()
 
         # ────────── SAĞ PANEL ──────────
@@ -321,8 +316,8 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.video_player)
         splitter.addWidget(self.result_panel)
 
-        # Oranlar: Sol %18, Orta %45, Sağ %37
-        splitter.setSizes([260, 640, 540])
+        # Oranlar: Sol %15, Orta %50, Sağ %35
+        splitter.setSizes([220, 720, 500])
 
         main_layout.addWidget(splitter, 1)
 
@@ -341,35 +336,6 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("Hazır — Video yüklemek için 'Dosya Aç' butonunu kullanın")
 
     # ────────────────────────────────────
-    # DATASET LİSTESİ
-    # ────────────────────────────────────
-    def _populate_video_list(self):
-        """Dataset klasöründeki videoları listeler."""
-        from src.config import GHOST_HIT_DIR, REAL_HIT_DIR
-
-        datasets = [
-            ("🔴 Ghost Hit", GHOST_HIT_DIR),
-            ("✅ Real Hit", REAL_HIT_DIR),
-        ]
-
-        for label, directory in datasets:
-            # Kategori başlığı
-            header_item = QListWidgetItem(f"── {label} ──")
-            header_item.setFlags(Qt.NoItemFlags)
-            header_item.setForeground(QColor("#e94560" if "Ghost" in label else "#2ea043"))
-            font = header_item.font()
-            font.setBold(True)
-            header_item.setFont(font)
-            self.video_list.addItem(header_item)
-
-            if os.path.exists(directory):
-                for f in sorted(os.listdir(directory)):
-                    if f.endswith(".mp4"):
-                        item = QListWidgetItem(f"  {f}")
-                        item.setData(Qt.UserRole, os.path.join(directory, f))
-                        self.video_list.addItem(item)
-
-    # ────────────────────────────────────
     # DOSYA İŞLEMLERİ
     # ────────────────────────────────────
     def _open_file(self):
@@ -382,12 +348,6 @@ class MainWindow(QMainWindow):
         )
         if file_path:
             self._load_video(file_path)
-
-    def _on_list_item_clicked(self, item):
-        """Dataset listesinden video seçimi."""
-        path = item.data(Qt.UserRole)
-        if path and os.path.exists(path):
-            self._load_video(path)
 
     def _load_video(self, video_path: str):
         """Videoyu oynatıcıya yükler."""
