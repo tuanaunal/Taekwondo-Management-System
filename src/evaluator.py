@@ -53,9 +53,9 @@ class PerformanceEvaluator:
         details : dict
             Ek analiz detayları.
         """
-        # Etiketleri standartlaştır
+        # Etiketleri standartlaştır (Ghost Hit/Dış Etken temassız durumlar 1, Real Hit/Hafif Temas temaslı durumlar 0'dır)
         true_binary = 1 if "ghost" in true_label.lower() else 0
-        pred_binary = 1 if "ghost" in predicted_label.lower() else 0
+        pred_binary = 1 if ("ghost" in predicted_label.lower() or "external" in predicted_label.lower()) else 0
 
         self.y_true.append(true_binary)
         self.y_pred.append(pred_binary)
