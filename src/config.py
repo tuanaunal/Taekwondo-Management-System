@@ -51,24 +51,24 @@ MEDIAN_KERNEL_SIZE = 5
 
 HSV_RANGES = {
     # ── KIRMIZI KASK (Hogu) ──
-    "red_helmet_lower1": np.array([0, 100, 100]),
-    "red_helmet_upper1": np.array([10, 255, 255]),
-    "red_helmet_lower2": np.array([168, 100, 100]),
+    "red_helmet_lower1": np.array([0, 45, 40]),
+    "red_helmet_upper1": np.array([12, 255, 255]),
+    "red_helmet_lower2": np.array([165, 45, 40]),
     "red_helmet_upper2": np.array([180, 255, 255]),
 
     # ── MAVİ KASK (Hogu) ──
-    "blue_helmet_lower": np.array([100, 120, 80]),
-    "blue_helmet_upper": np.array([125, 255, 255]),
+    "blue_helmet_lower": np.array([90, 50, 40]),
+    "blue_helmet_upper": np.array([130, 255, 255]),
 
     # ── KIRMIZI AYAK KORUYUCU ──
-    "red_foot_lower1": np.array([0, 100, 100]),
-    "red_foot_upper1": np.array([10, 255, 255]),
-    "red_foot_lower2": np.array([168, 100, 100]),
+    "red_foot_lower1": np.array([0, 45, 40]),
+    "red_foot_upper1": np.array([12, 255, 255]),
+    "red_foot_lower2": np.array([165, 45, 40]),
     "red_foot_upper2": np.array([180, 255, 255]),
 
     # ── MAVİ AYAK KORUYUCU ──
-    "blue_foot_lower": np.array([100, 120, 80]),
-    "blue_foot_upper": np.array([125, 255, 255]),
+    "blue_foot_lower": np.array([90, 50, 40]),
+    "blue_foot_upper": np.array([130, 255, 255]),
 }
 
 # ──────────────────────────────────────────────
@@ -85,14 +85,16 @@ MIN_CONTOUR_AREA = 500
 # Maksimum kontur alanı (piksel²) — devasa sahte tespitleri filtrele
 # Gerçek kask: ~15,000-30,000 px², gerçek ayak: ~3,000-20,000 px²
 # Bu değerin üzerindeki konturlar zemin/arka plan olarak kabul edilir
-MAX_CONTOUR_AREA = 80000
+MAX_CONTOUR_AREA = 350000
 
 # ──────────────────────────────────────────────
 # 6. KİNEMATİK ANALİZ EŞİKLERİ
 # ──────────────────────────────────────────────
 # İvme eşik değeri (piksel/frame²)
 # Bu değerin üzerindeki ani ivme artışları "darbe" olarak sınıflandırılır
-ACCELERATION_IMPACT_THRESHOLD = 15.0
+# NOT: kinematics.py ivmeyi piksel/saniye² cinsinden hesapladığından, 15.0 px/frame² eşiği
+# 15 * 30^2 = 13500 px/s² civarına denk gelir. Gürültü ve gerçek tekmeleri dengelemek için 8000.0 px/s² seçilmiştir.
+ACCELERATION_IMPACT_THRESHOLD = 8000.0
 
 # İvme profili sınıflandırma parametreleri
 # Darbe ivmesi: kısa sürede yüksek tepe noktası

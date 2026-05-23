@@ -102,8 +102,10 @@ class DecisionEngine:
         # Etkili temas oranı: overlap + near miss'in yarısı
         effective_contact_ratio = contact_ratio + near_miss_ratio * 0.5
 
-        # Eğer etkili temas oranı %15'i aşıyorsa, temas var kabul et
-        if not has_contact and effective_contact_ratio > 0.15:
+        # GÜNCELLEME: Morfolojik aşınma (erosion bias) nedeniyle temas anında piksel
+        # çakışması (overlap) 0 veya çok düşük kalabilmektedir. Ancak kask-ayak sınır mesafesi
+        # (min_distance) 15.0 pikselin altındaysa bu durum fiziksel olarak kesin bir temastır.
+        if not has_contact and min_distance <= 15.0:
             has_contact = True
 
         motion_type = kinematic_result.get("type", "stationary")
@@ -147,25 +149,52 @@ class DecisionEngine:
                 f"Hafif temas veya sürtünme olabilir."
             )
 
+        elif not has_contact and motion_type == "impact" and min_distance <= 55:
+            # PROXIMITY KURALI (DARBE): Temas yok ama ayak-kask mesafesi
+            # ≤55px ve darbe ivmesi var. Morfolojik aşınma + kontur kenarı
+            # kayması nedeniyle gerçek temasta 20-55px ölçüm sapması olabilir.
+            decision = self.LIGHT_CONTACT
+            confidence = contact_score * 0.7 + (1.0 - kinematic_score) * 0.3
+            reasoning = (
+                f"Piksel çakışması tespit edilemedi ancak kask-ayak mesafesi "
+                f"çok yakın ({min_distance:.1f}px <= 55px) ve darbe ivmesi "
+                f"tespit edildi (tepe: {max_acceleration:.1f}px/s²). "
+                f"Morfolojik kayma telafisiyle hafif temas olarak değerlendirildi."
+            )
+
+        elif not has_contact and motion_type in ("evasion", "stationary") and min_distance <= 30:
+            # PROXIMITY KURALI (KAÇIŞ): Temas yok ama ayak-kask mesafesi
+            # ≤30px. Kinematik analiz "kaçış" gösterse de bu mesafe aralığında
+            # gerçek temasın kaçırılma olasılığı yüksek.
+            # (En yakın Ghost Hit evasion mesafesi: 32.2px — güvenli aralık.)
+            decision = self.LIGHT_CONTACT
+            confidence = contact_score * 0.6
+            reasoning = (
+                f"Piksel çakışması tespit edilemedi ancak kask-ayak mesafesi "
+                f"çok yakın ({min_distance:.1f}px <= 30px). Kinematik analiz "
+                f"kaçış gösterse de bu mesafe gerçek temas olasılığını işaret eder."
+            )
+
         elif not has_contact and motion_type == "impact":
-            decision = self.EXTERNAL_FACTOR
-            confidence = (1.0 - contact_score) * 0.6
+            decision = self.GHOST_HIT
+            confidence = (1.0 - contact_score) * WEIGHT_CONTACT + \
+                         (1.0 - kinematic_score) * WEIGHT_KINEMATICS
             reasoning = (
                 f"Fiziksel temas tespit edilemedi "
                 f"(min mesafe: {min_distance:.1f}px) "
-                f"ancak kaskta darbe profili var. "
-                f"Dış etken (rüzgar, zemin, sporcu refleksi) olabilir."
+                f"ancak kaskta darbe ivmesi tespit edildi (tepe: {max_acceleration:.1f}px/s²). "
+                f"Bu durum GHOST HIT (temassız sarsıntı) ile uyumludur."
             )
 
         elif not has_contact and motion_type in ("evasion", "stationary"):
-            decision = self.GHOST_HIT
+            decision = self.EXTERNAL_FACTOR
             confidence = (1.0 - contact_score) * WEIGHT_CONTACT + \
                          kinematic_score * WEIGHT_KINEMATICS
             reasoning = (
                 f"Fiziksel temas tespit edilemedi "
                 f"(min mesafe: {min_distance:.1f}px) "
-                f"ve kask hareketi aktif kaçış profili gösteriyor. "
-                f"Bu durum GHOST HIT (temassız sarsıntı) ile uyumludur."
+                f"ve kask hareketi aktif kaçış/durma profili gösteriyor. "
+                f"Bu durum Dış Etken veya Aktif Kaçış ile uyumludur."
             )
 
         else:

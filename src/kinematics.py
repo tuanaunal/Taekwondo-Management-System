@@ -30,12 +30,28 @@ class KinematicAnalyzer:
         self.fps = fps
         self.dt = 1.0 / fps  # Kare aralığı (saniye)
 
+    def smooth_positions(self, positions: np.ndarray, window_size: int = 3) -> np.ndarray:
+        """
+        Yörünge koordinatlarındaki yüksek frekanslı titremeleri (jitter)
+        azaltmak için hareketli ortalama (moving average) filtresi uygular.
+        """
+        if len(positions) < window_size:
+            return positions
+        smoothed = np.copy(positions)
+        half_w = window_size // 2
+        for i in range(len(positions)):
+            start = max(0, i - half_w)
+            end = min(len(positions), i + half_w + 1)
+            smoothed[i] = np.mean(positions[start:end], axis=0)
+        return smoothed
+
     # ────────────────────────────────────
     # YER DEĞİŞTİRME HESABI
     # ────────────────────────────────────
     def compute_displacement(self, trajectory: list) -> np.ndarray:
         """
         Ardışık kareler arasındaki piksel yer değiştirmesini hesaplar.
+        Yörünge gürültüsünü önlemek için önce hareketli ortalama ile yumuşatılır.
 
         Parameters
         ----------
@@ -52,6 +68,7 @@ class KinematicAnalyzer:
             return np.array([0.0])
 
         positions = np.array([(t[0], t[1]) for t in trajectory], dtype=float)
+        positions = self.smooth_positions(positions, window_size=3)
         diff = np.diff(positions, axis=0)
         displacement = np.sqrt(diff[:, 0] ** 2 + diff[:, 1] ** 2)
         return displacement
@@ -156,7 +173,7 @@ class KinematicAnalyzer:
         # ── Kriter 2: İvme süresi (kaç frame boyunca yüksek?) ──
         high_acc_mask = abs_acc > (ACCELERATION_IMPACT_THRESHOLD * 0.5)
         high_acc_duration = np.sum(high_acc_mask)
-        is_short_duration = high_acc_duration <= IMPACT_DURATION_MAX_FRAMES
+        is_short_duration = 0 < high_acc_duration <= IMPACT_DURATION_MAX_FRAMES
 
         # ── Kriter 3: İvme varyasyon katsayısı ──
         mean_acc = np.mean(abs_acc) if np.mean(abs_acc) > 0 else 1e-6

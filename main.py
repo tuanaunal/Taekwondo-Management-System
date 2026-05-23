@@ -107,8 +107,22 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
                 seg_results.get(helmet_key, {}),
                 seg_results.get(foot_key, {}),
             )
-            if best_contact is None or contact["overlap_pixels"] > best_contact["overlap_pixels"]:
+            # Pair anahtarlarini temasa ekle
+            contact["helmet_key"] = helmet_key
+            contact["foot_key"] = foot_key
+
+            if best_contact is None:
                 best_contact = contact
+                continue
+
+            # Karşılaştırma mantığı:
+            # 1. Eğer birinde çakışma pikseli daha fazlaysa o tercih edilir.
+            if contact["overlap_pixels"] > best_contact["overlap_pixels"]:
+                best_contact = contact
+            elif contact["overlap_pixels"] == best_contact["overlap_pixels"]:
+                # 2. Çakışma pikselleri eşitse (örn. ikisi de 0), kontur mesafesi daha yakın olan çift seçilir.
+                if contact["min_contour_distance"] < best_contact["min_contour_distance"]:
+                    best_contact = contact
 
         if best_contact is None:
             best_contact = {
@@ -119,6 +133,8 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
                 "min_contour_distance": float("inf"),
                 "confidence": 0.0,
                 "details": "Hicbir ekipman cifti tespit edilemedi.",
+                "helmet_key": None,
+                "foot_key": None,
             }
 
         frame_contacts.append(best_contact)
@@ -158,17 +174,47 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
     contact_summary = contact_analyzer.analyze_video_contacts(frame_contacts)
 
     # -- Kinematik Analiz --
-    # En cok hareket eden kask yorungesini bul
+    # Temasin veya en yakin gecisin gerceklestigi hedef kaski bul
+    target_helmet_key = None
+    
+    # 1. Eger fiziksel temas varsa, en yuksek overlap olan karedeki kaski sec
+    peak_overlap = 0
+    for r in frame_contacts:
+        if r.get("contact_type") == "overlap" and r.get("overlap_pixels", 0) > peak_overlap:
+            peak_overlap = r["overlap_pixels"]
+            target_helmet_key = r.get("helmet_key")
+            
+    # 2. Eger fiziksel temas yoksa, en yakin gecisin (min contour distance) oldugu karedeki kaski sec
+    if target_helmet_key is None:
+        min_dist = float("inf")
+        for r in frame_contacts:
+            dist = r.get("min_contour_distance", float("inf"))
+            if dist < min_dist:
+                min_dist = dist
+                target_helmet_key = r.get("helmet_key")
+                
+    # Geriye donuk varsayilan secim
+    if target_helmet_key is None:
+        target_helmet_key = "red_helmet"
+
     all_traj = tracker.get_all_trajectories()
     best_trajectory = []
-    best_traj_key = None
+    best_traj_key = target_helmet_key
 
-    for key in ["red_helmet", "blue_helmet"]:
-        trajs = all_traj.get(key, {})
+    # Secilen kaska ait en uzun yorungeyi al
+    trajs = all_traj.get(target_helmet_key, {})
+    for obj_id, traj in trajs.items():
+        if len(traj) > len(best_trajectory):
+            best_trajectory = traj
+            
+    # Eger secilen kask icin yorunge cok kisaysa veya bulunamazsa diger kaska bak (fallback)
+    if len(best_trajectory) < 3:
+        other_key = "blue_helmet" if target_helmet_key == "red_helmet" else "red_helmet"
+        trajs = all_traj.get(other_key, {})
         for obj_id, traj in trajs.items():
             if len(traj) > len(best_trajectory):
                 best_trajectory = traj
-                best_traj_key = key
+                best_traj_key = other_key
 
     kinematic_result = kinematic_analyzer.classify_motion(best_trajectory)
 
