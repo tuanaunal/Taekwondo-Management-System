@@ -93,8 +93,8 @@ MAX_CONTOUR_AREA = 350000
 # İvme eşik değeri (piksel/frame²)
 # Bu değerin üzerindeki ani ivme artışları "darbe" olarak sınıflandırılır
 # NOT: kinematics.py ivmeyi piksel/saniye² cinsinden hesapladığından, 15.0 px/frame² eşiği
-# 15 * 30^2 = 13500 px/s² civarına denk gelir. Gürültü ve gerçek tekmeleri dengelemek için 8000.0 px/s² seçilmiştir.
-ACCELERATION_IMPACT_THRESHOLD = 8000.0
+# 15 * 30^2 = 13500 px/s² civarına denk gelir. Gürültü ve gerçek tekmeleri dengelemek için YOLO ile 1500.0 px/s² seçilmiştir.
+ACCELERATION_IMPACT_THRESHOLD = 1500.0
 
 # İvme profili sınıflandırma parametreleri
 # Darbe ivmesi: kısa sürede yüksek tepe noktası
