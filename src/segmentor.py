@@ -24,7 +24,7 @@ from src.config import (
 _SEG_MAX_AREA = 80_000
 _SEG_MIN_CIRCULARITY = 0.20
 _SEG_MIN_SOLIDITY = 0.60
-_SEG_MIN_AREA = 600
+_SEG_MIN_AREA = 1000
 
 # Statik filtre sabitleri
 _STATIC_DIST_THRESHOLD = 8      # piksel
