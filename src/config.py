@@ -51,23 +51,23 @@ MEDIAN_KERNEL_SIZE = 5
 
 HSV_RANGES = {
     # ── KIRMIZI KASK (Hogu) ──
-    "red_helmet_lower1": np.array([0, 45, 40]),
+    "red_helmet_lower1": np.array([0, 30, 20]),
     "red_helmet_upper1": np.array([12, 255, 255]),
-    "red_helmet_lower2": np.array([165, 45, 40]),
+    "red_helmet_lower2": np.array([165, 30, 20]),
     "red_helmet_upper2": np.array([180, 255, 255]),
 
     # ── MAVİ KASK (Hogu) ──
-    "blue_helmet_lower": np.array([90, 50, 40]),
+    "blue_helmet_lower": np.array([90, 30, 20]),
     "blue_helmet_upper": np.array([130, 255, 255]),
 
     # ── KIRMIZI AYAK KORUYUCU ──
-    "red_foot_lower1": np.array([0, 45, 40]),
+    "red_foot_lower1": np.array([0, 30, 20]),
     "red_foot_upper1": np.array([12, 255, 255]),
-    "red_foot_lower2": np.array([165, 45, 40]),
+    "red_foot_lower2": np.array([165, 30, 20]),
     "red_foot_upper2": np.array([180, 255, 255]),
 
     # ── MAVİ AYAK KORUYUCU ──
-    "blue_foot_lower": np.array([90, 50, 40]),
+    "blue_foot_lower": np.array([90, 30, 20]),
     "blue_foot_upper": np.array([130, 255, 255]),
 }
 

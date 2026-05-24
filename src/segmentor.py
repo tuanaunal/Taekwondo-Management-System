@@ -22,7 +22,7 @@ from src.config import (
 
 # -- Segmentor-ozel sabitler --
 _SEG_MAX_AREA = 80_000
-_SEG_MIN_CIRCULARITY = 0.25
+_SEG_MIN_CIRCULARITY = 0.20
 _SEG_MIN_SOLIDITY = 0.60
 _SEG_MIN_AREA = 600
 
@@ -220,10 +220,15 @@ class EquipmentSegmentor:
         if prev_red_h is not None and prev_blue_h is not None:
             split_x = (prev_red_h[0] + prev_blue_h[0]) // 2
 
+        # Dinamik Crossover Yön Tespiti (Flipped video desteği)
+        red_is_left = True
+        if prev_red_h is not None and prev_blue_h is not None:
+            red_is_left = prev_red_h[0] < prev_blue_h[0]
+
         if color == "red":
-            own_side = lambda cx_val: cx_val < split_x
+            own_side = lambda cx_val: cx_val < split_x if red_is_left else cx_val >= split_x
         else:
-            own_side = lambda cx_val: cx_val >= split_x
+            own_side = lambda cx_val: cx_val >= split_x if red_is_left else cx_val < split_x
 
         own_side_contours = [c for c in valid_contours
                              if own_side(c["centroid"][0])]
