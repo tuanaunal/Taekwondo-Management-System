@@ -102,12 +102,6 @@ class DecisionEngine:
         # Etkili temas oranı: overlap + near miss'in yarısı
         effective_contact_ratio = contact_ratio + near_miss_ratio * 0.5
 
-        # GÜNCELLEME: Morfolojik aşınma (erosion bias) nedeniyle temas anında piksel
-        # çakışması (overlap) 0 veya çok düşük kalabilmektedir. Ancak kask-ayak sınır mesafesi
-        # (min_distance) 15.0 pikselin altındaysa bu durum fiziksel olarak kesin bir temastır.
-        if not has_contact and min_distance <= 15.0:
-            has_contact = True
-
         motion_type = kinematic_result.get("type", "stationary")
         motion_confidence = kinematic_result.get("confidence", 0.0)
         max_acceleration = kinematic_result.get("max_acceleration", 0.0)
@@ -128,75 +122,37 @@ class DecisionEngine:
         else:
             kinematic_score = 0.5  # Belirsiz
 
+        net_disp = kinematic_result.get("net_displacement", 0.0)
+
         # ── Karar Matrisi ──
-        if has_contact and motion_type == "impact":
-            decision = self.REAL_HIT
-            confidence = (contact_score * WEIGHT_CONTACT +
-                         (1.0 - kinematic_score) * WEIGHT_KINEMATICS)
-            reasoning = (
-                f"Fiziksel temas doğrulandı (çakışan: {max_overlap}px, "
-                f"temas oranı: {contact_ratio:.1%}) ve darbe ivmesi tespit "
-                f"edildi (tepe: {max_acceleration:.1f}px/s²). "
-                f"Bu durum gerçek bir darbe ile uyumludur."
-            )
+        if motion_type == "impact":
+            if has_contact:
+                # Gerçek fiziksel temas + İvme -> KESİN GERÇEK DARBE
+                decision = self.REAL_HIT
+                confidence = (contact_score * WEIGHT_CONTACT + (1.0 - kinematic_score) * WEIGHT_KINEMATICS)
+                reasoning = f"Fiziksel temas ve darbe ivmesi var. Kesin Gerçek Darbe."
+            else:
+                # Temas yok (Ayak kapanmış olabilir veya havayı tekmeliyor olabilir)
+                # İkisini ayırmak için net_disp (kafa savrulması) kullanıyoruz.
+                # max_acc (ivme) YOLO titremelerinden çok etkilendiği için çıkarıldı.
+                if net_disp > 180.0 and max_acceleration < 12000.0:
+                    decision = self.REAL_HIT
+                    confidence = 0.8
+                    reasoning = f"Temas tespit edilemedi ancak kaskta istikrarlı savrulma (Savrulma: {net_disp:.1f} > 180) var. Gerçek darbe."
+                else:
+                    decision = self.GHOST_HIT
+                    confidence = 0.8
+                    reasoning = f"Temas yok. Kaskta sarsıntı var ancak kafa savrulması yetersiz veya hatalı (Savrulma: {net_disp:.1f} <= 180). Ghost Hit."
 
-        elif has_contact and motion_type in ("evasion", "stationary"):
-            decision = self.LIGHT_CONTACT
-            confidence = contact_score * 0.7
-            reasoning = (
-                f"Fiziksel temas tespit edildi (çakışan: {max_overlap}px) "
-                f"ancak kask hareketi darbe profili göstermiyor. "
-                f"Hafif temas veya sürtünme olabilir."
-            )
-
-        elif not has_contact and motion_type == "impact" and min_distance <= 55:
-            # PROXIMITY KURALI (DARBE): Temas yok ama ayak-kask mesafesi
-            # ≤55px ve darbe ivmesi var. Morfolojik aşınma + kontur kenarı
-            # kayması nedeniyle gerçek temasta 20-55px ölçüm sapması olabilir.
-            decision = self.LIGHT_CONTACT
-            confidence = contact_score * 0.7 + (1.0 - kinematic_score) * 0.3
-            reasoning = (
-                f"Piksel çakışması tespit edilemedi ancak kask-ayak mesafesi "
-                f"çok yakın ({min_distance:.1f}px <= 55px) ve darbe ivmesi "
-                f"tespit edildi (tepe: {max_acceleration:.1f}px/s²). "
-                f"Morfolojik kayma telafisiyle hafif temas olarak değerlendirildi."
-            )
-
-        elif not has_contact and motion_type in ("evasion", "stationary") and min_distance <= 30:
-            # PROXIMITY KURALI (KAÇIŞ): Temas yok ama ayak-kask mesafesi
-            # ≤30px. Kinematik analiz "kaçış" gösterse de bu mesafe aralığında
-            # gerçek temasın kaçırılma olasılığı yüksek.
-            # (En yakın Ghost Hit evasion mesafesi: 32.2px — güvenli aralık.)
-            decision = self.LIGHT_CONTACT
-            confidence = contact_score * 0.6
-            reasoning = (
-                f"Piksel çakışması tespit edilemedi ancak kask-ayak mesafesi "
-                f"çok yakın ({min_distance:.1f}px <= 30px). Kinematik analiz "
-                f"kaçış gösterse de bu mesafe gerçek temas olasılığını işaret eder."
-            )
-
-        elif not has_contact and motion_type == "impact":
-            decision = self.GHOST_HIT
-            confidence = (1.0 - contact_score) * WEIGHT_CONTACT + \
-                         (1.0 - kinematic_score) * WEIGHT_KINEMATICS
-            reasoning = (
-                f"Fiziksel temas tespit edilemedi "
-                f"(min mesafe: {min_distance:.1f}px) "
-                f"ancak kaskta darbe ivmesi tespit edildi (tepe: {max_acceleration:.1f}px/s²). "
-                f"Bu durum GHOST HIT (temassız sarsıntı) ile uyumludur."
-            )
-
-        elif not has_contact and motion_type in ("evasion", "stationary"):
-            decision = self.EXTERNAL_FACTOR
-            confidence = (1.0 - contact_score) * WEIGHT_CONTACT + \
-                         kinematic_score * WEIGHT_KINEMATICS
-            reasoning = (
-                f"Fiziksel temas tespit edilemedi "
-                f"(min mesafe: {min_distance:.1f}px) "
-                f"ve kask hareketi aktif kaçış/durma profili gösteriyor. "
-                f"Bu durum Dış Etken veya Aktif Kaçış ile uyumludur."
-            )
-
+        elif motion_type in ("evasion", "stationary"):
+            if has_contact:
+                decision = self.LIGHT_CONTACT
+                confidence = contact_score * 0.7
+                reasoning = f"Fiziksel temas tespit edildi ancak darbe ivmesi yok. Hafif temas."
+            else:
+                decision = self.EXTERNAL_FACTOR
+                confidence = (1.0 - contact_score) * 0.7
+                reasoning = f"Fiziksel temas yok ve kask hareketi kaçış profili gösteriyor. Dış Etken/Kaçış."
         else:
             decision = self.INCONCLUSIVE
             confidence = 0.3

@@ -92,55 +92,58 @@ class EquipmentSegmentor:
             def get_best_foot(pts):
                 ankle_left, ankle_right = pts[15], pts[16]
                 knee_left, knee_right = pts[13], pts[14]
-                hip_left, hip_right = pts[11], pts[12]
                 
                 # 1. Try Ankles (highest one)
                 ankles = [p for p in [ankle_left, ankle_right] if p[0] > 0 and p[1] > 0]
                 if ankles:
                     ankles.sort(key=lambda p: p[1])
-                    return (int(ankles[0][0]), int(ankles[0][1]))
+                    return (int(ankles[0][0]), int(ankles[0][1])), "ankle"
                     
-                # 2. Try Extrapolating from Knee and Hip
-                knees = [(knee_left, hip_left), (knee_right, hip_right)]
-                valid_knees = [k for k in knees if k[0][0] > 0 and k[0][1] > 0 and k[1][0] > 0 and k[1][1] > 0]
-                if valid_knees:
-                    valid_knees.sort(key=lambda k: k[0][1])
-                    knee, hip = valid_knees[0]
-                    dx = knee[0] - hip[0]
-                    dy = knee[1] - hip[1]
-                    est_x = knee[0] + dx
-                    est_y = knee[1] + dy
-                    return (int(est_x), int(est_y))
-                    
-                # 3. Fallback to just Knee
-                knees_only = [p for p in [knee_left, knee_right] if p[0] > 0 and p[1] > 0]
-                if knees_only:
-                    knees_only.sort(key=lambda p: p[1])
-                    return (int(knees_only[0][0]), int(knees_only[0][1]))
-                    
-                return None
+                # We NO LONGER fallback to Knees or Hips!
+                # Falling back to Knees/Hips creates fake "distances" that ruin proximity rules.
+                # Instead, we will return None and let the history-holder keep the last position!
+                return None, "none"
 
             if red_person:
                 self.last_red_x = red_person["center_x"]
                 pts = red_person["pts"]
-                if pts[0][0] > 0 and pts[0][1] > 0: # Nose
+                if pts[0][0] > 0 and pts[0][1] > 0:
                     red_helmet_pt = (int(pts[0][0]), int(pts[0][1]))
                 
-                red_foot_pt = get_best_foot(pts)
+                foot_pt, label = get_best_foot(pts)
+                if foot_pt:
+                    red_foot_pt = foot_pt
+                    self.red_foot_history = foot_pt
+                    self.red_foot_lost_frames = 0
+                else:
+                    # Hold last known position for up to 5 frames (occlusion fix)
+                    if hasattr(self, 'red_foot_history') and self.red_foot_lost_frames < 5:
+                        red_foot_pt = self.red_foot_history
+                        self.red_foot_lost_frames += 1
                     
             if blue_person:
                 pts = blue_person["pts"]
-                if pts[0][0] > 0 and pts[0][1] > 0: # Nose
+                if pts[0][0] > 0 and pts[0][1] > 0:
                     blue_helmet_pt = (int(pts[0][0]), int(pts[0][1]))
                 
-                blue_foot_pt = get_best_foot(pts)
+                foot_pt, label = get_best_foot(pts)
+                if foot_pt:
+                    blue_foot_pt = foot_pt
+                    self.blue_foot_history = foot_pt
+                    self.blue_foot_lost_frames = 0
+                else:
+                    if hasattr(self, 'blue_foot_history') and self.blue_foot_lost_frames < 5:
+                        blue_foot_pt = self.blue_foot_history
+                        self.blue_foot_lost_frames += 1
 
         output = {}
-        # Sahte maskeleri oluştur
-        output["red_helmet"] = self._create_fake_features(red_helmet_pt, h, w, radius=30)
-        output["red_foot"] = self._create_fake_features(red_foot_pt, h, w, radius=40)
-        output["blue_helmet"] = self._create_fake_features(blue_helmet_pt, h, w, radius=30)
-        output["blue_foot"] = self._create_fake_features(blue_foot_pt, h, w, radius=40)
+        # Masks: 80px radius (160px total reach to catch overlapping hits)
+        output["red_helmet"] = self._create_fake_features(red_helmet_pt, h, w, radius=80)
+        output["red_foot"] = self._create_fake_features(red_foot_pt, h, w, radius=80)
+        output["blue_helmet"] = self._create_fake_features(blue_helmet_pt, h, w, radius=80)
+        output["blue_foot"] = self._create_fake_features(blue_foot_pt, h, w, radius=80)
+
+
         
         return output
 

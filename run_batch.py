@@ -87,6 +87,10 @@ def run_batch_analysis():
                     },
                 )
 
+                net_disp = result["kinematic_result"].get("net_displacement", 0)
+                max_acc = result["kinematic_result"].get("max_acceleration", 0)
+                kinetic_energy = (net_disp * 1.5) + (max_acc * 0.5)
+
                 all_results.append({
                     "video": video_name,
                     "true_label": label,
@@ -94,6 +98,9 @@ def run_batch_analysis():
                     "label_tr": label_tr,
                     "confidence": confidence,
                     "graph_path": result.get("graph_path", ""),
+                    "net_disp": net_disp,
+                    "max_acc": max_acc,
+                    "kinetic_energy": kinetic_energy
                 })
 
                 print(f"    {indicator} {label_tr} (güven: {confidence:.1%})")
@@ -138,16 +145,23 @@ def run_batch_analysis():
         print("\n" + "─" * 60)
         print("  VIDEO BAZLI SONUÇLAR")
         print("─" * 60)
-        for _, row in df.iterrows():
+        for row in all_results:
             is_true_ghost = "ghost" in row["true_label"].lower()
             is_pred_ghost = "ghost" in row["predicted"].lower() or "external" in row["predicted"].lower()
             match_icon = "✓" if (is_true_ghost == is_pred_ghost) else "✗"
             print(f"  {match_icon} {row['video']:12s} | Gerçek: {row['true_label']:10s} | "
                   f"Tahmin: {row['label_tr']:30s} | Güven: {row['confidence']:.1%}")
 
-    print("\n" + "=" * 60)
+    # Sadece CSV formatında raporlama
+    csv_path = os.path.join(REPORTS_DIR, "batch_summary_detailed.csv")
+    with open(csv_path, "w", encoding="utf-8") as f:
+        f.write("video,true_label,predicted,label_tr,confidence,net_disp,max_acc,kinetic_energy,graph_path\n")
+        for r in all_results:
+            f.write(f"{r['video']},{r['true_label']},{r['predicted']},{r['label_tr']},{r['confidence']},{r['net_disp']},{r['max_acc']},{r['kinetic_energy']},{r['graph_path']}\n")
+
+    print("\n" + "="*60)
     print("  Toplu analiz tamamlandı!")
-    print("=" * 60)
+    print("="*60 + "\n")
 
     return evaluator.compute_metrics()
 

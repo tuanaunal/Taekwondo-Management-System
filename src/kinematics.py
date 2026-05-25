@@ -34,15 +34,30 @@ class KinematicAnalyzer:
         """
         Yörünge koordinatlarındaki yüksek frekanslı titremeleri (jitter)
         azaltmak için hareketli ortalama (moving average) filtresi uygular.
+        Ayrıca YOLO'nun imkansız sıçramalarını (1 karede >50 piksel) engeller.
         """
         if len(positions) < window_size:
             return positions
-        smoothed = np.copy(positions)
+            
+        # 1. Despike (Fiziksel olarak imkansız sıçramaları filtrele)
+        # Bir insan kafası 1 karede (33ms) 50 pikselden fazla hareket edemez.
+        # Eğer ederse, bu YOLO'nun kafa yerine ayağı takip ettiğinin kanıtıdır.
+        despiked = np.copy(positions)
+        MAX_JUMP = 50.0
+        for i in range(1, len(despiked)):
+            dist = np.linalg.norm(despiked[i] - despiked[i-1])
+            if dist > MAX_JUMP:
+                # İmkansız sıçrama: Bir önceki geçerli konumu koru
+                despiked[i] = despiked[i-1]
+                
+        # 2. Hareketli Ortalama (Moving Average)
+        smoothed = np.copy(despiked)
         half_w = window_size // 2
-        for i in range(len(positions)):
+        for i in range(len(despiked)):
             start = max(0, i - half_w)
-            end = min(len(positions), i + half_w + 1)
-            smoothed[i] = np.mean(positions[start:end], axis=0)
+            end = min(len(despiked), i + half_w + 1)
+            smoothed[i] = np.mean(despiked[start:end], axis=0)
+            
         return smoothed
 
     # ────────────────────────────────────
@@ -50,19 +65,7 @@ class KinematicAnalyzer:
     # ────────────────────────────────────
     def compute_displacement(self, trajectory: list) -> np.ndarray:
         """
-        Ardışık kareler arasındaki piksel yer değiştirmesini hesaplar.
-        Yörünge gürültüsünü önlemek için önce hareketli ortalama ile yumuşatılır.
-
-        Parameters
-        ----------
-        trajectory : list of tuple
-            [(cx, cy, frame_idx), ...]
-
-        Returns
-        -------
-        np.ndarray
-            Her kare geçişindeki yer değiştirme (piksel).
-            Uzunluk: len(trajectory) - 1
+        Ardışık noktalar arasındaki piksel yer değiştirmesini hesaplar.
         """
         if len(trajectory) < 2:
             return np.array([0.0])
@@ -73,40 +76,44 @@ class KinematicAnalyzer:
         displacement = np.sqrt(diff[:, 0] ** 2 + diff[:, 1] ** 2)
         return displacement
 
-    # ────────────────────────────────────
-    # HIZ HESABI
-    # ────────────────────────────────────
     def compute_velocity(self, trajectory: list) -> np.ndarray:
         """
-        Hız = ΔDisplacement / Δt
-
-        Returns
-        -------
-        np.ndarray
-            Piksel/saniye cinsinden hız vektörü.
+        Hız = ΔDisplacement / Δt (frame_idx farkı kullanılarak)
         """
+        if len(trajectory) < 2:
+            return np.array([0.0])
+            
         displacement = self.compute_displacement(trajectory)
-        velocity = displacement / self.dt
+        
+        # Frame farklarını hesapla
+        frames = np.array([t[2] for t in trajectory], dtype=float)
+        frame_diffs = np.diff(frames)
+        
+        # 0'a bölme hatasını önle
+        frame_diffs[frame_diffs == 0] = 1.0
+        
+        # Her bir aralık için dt = frame_diff * self.dt
+        actual_dts = frame_diffs * self.dt
+        
+        velocity = displacement / actual_dts
         return velocity
 
-    # ────────────────────────────────────
-    # İVME HESABI
-    # ────────────────────────────────────
     def compute_acceleration(self, trajectory: list) -> np.ndarray:
         """
         İvme = ΔVelocity / Δt
-
-        Returns
-        -------
-        np.ndarray
-            Piksel/saniye² cinsinden ivme vektörü.
-            Uzunluk: len(trajectory) - 2
         """
         velocity = self.compute_velocity(trajectory)
         if len(velocity) < 2:
             return np.array([0.0])
 
-        acceleration = np.diff(velocity) / self.dt
+        frames = np.array([t[2] for t in trajectory], dtype=float)
+        # İvme için ardışık hızların zaman farkı, aslında noktalar arası orta noktaların zaman farkıdır
+        # Basitlik için hızlar arasındaki frame farkını, n. ve n+1. noktalar arasındaki fark olarak alıyoruz
+        frame_diffs = np.diff(frames[1:]) # length is len(velocity) - 1
+        frame_diffs[frame_diffs == 0] = 1.0
+        actual_dts = frame_diffs * self.dt
+
+        acceleration = np.diff(velocity) / actual_dts
         return acceleration
 
     # ────────────────────────────────────
@@ -166,6 +173,20 @@ class KinematicAnalyzer:
         peak_idx = np.argmax(abs_acc)
         result["max_acceleration"] = max_acc
         result["peak_frame"] = peak_idx
+        
+        # ── Net Displacement (Ghost Hit vs Real Hit ayrımı için) ──
+        # İvme zirvesinden 10 kare öncesi ve 10 kare sonrası arasındaki net yer değiştirme.
+        # Gerçek darbede kafa geriye savrulur (net_disp > 165px). 
+        # Ghost hitte kafa yerine döner veya az hareket eder (net_disp < 165px).
+        net_disp = 0.0
+        if len(trajectory) > 20:
+            start_idx = max(0, peak_idx - 10)
+            end_idx = min(len(trajectory) - 1, peak_idx + 10)
+            p_start = np.array([trajectory[start_idx][0], trajectory[start_idx][1]])
+            p_end = np.array([trajectory[end_idx][0], trajectory[end_idx][1]])
+            net_disp = np.linalg.norm(p_end - p_start)
+        
+        result["net_displacement"] = net_disp
 
         # ── Kriter 1: Tepe ivme eşiği ──
         exceeds_threshold = max_acc > ACCELERATION_IMPACT_THRESHOLD
