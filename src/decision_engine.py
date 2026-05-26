@@ -126,23 +126,28 @@ class DecisionEngine:
 
         # ── Karar Matrisi ──
         if motion_type == "impact":
-            if has_contact:
-                # Gerçek fiziksel temas + İvme -> KESİN GERÇEK DARBE
-                decision = self.REAL_HIT
-                confidence = (contact_score * WEIGHT_CONTACT + (1.0 - kinematic_score) * WEIGHT_KINEMATICS)
-                reasoning = f"Fiziksel temas ve darbe ivmesi var. Kesin Gerçek Darbe."
+            # Makine öğrenmesi analizinden çıkan optimum kural: 
+            # 8 piksel altı yakınlaşma GERÇEK temastır (YOLO hata payı).
+            if has_contact or min_distance <= 8.0:
+                # Gerçek fiziksel temas veya çok yakın teğet geçiş + İvme
+                if net_disp > 30.0 or max_acceleration > 2000.0:
+                    decision = self.REAL_HIT
+                    confidence = 0.85
+                    reasoning = f"Fiziksel temas (veya 8px altı yakınlaşma) ve darbe ivmesi doğrulandı. Kesin Gerçek Darbe."
+                else:
+                    decision = self.LIGHT_CONTACT
+                    confidence = 0.70
+                    reasoning = f"Temas var ancak darbe ivmesi/savrulma yetersiz. Hafif temas/Sürtünme."
             else:
-                # Temas yok (Ayak kapanmış olabilir veya havayı tekmeliyor olabilir)
-                # İkisini ayırmak için net_disp (kafa savrulması) kullanıyoruz.
-                # max_acc (ivme) YOLO titremelerinden çok etkilendiği için çıkarıldı.
-                if net_disp > 180.0 and max_acceleration < 12000.0:
+                # Temas yok. İkisini ayırmak için net_disp (kafa savrulması) kullanıyoruz.
+                if net_disp > 150.0:
                     decision = self.REAL_HIT
                     confidence = 0.8
-                    reasoning = f"Temas tespit edilemedi ancak kaskta istikrarlı savrulma (Savrulma: {net_disp:.1f} > 180) var. Gerçek darbe."
+                    reasoning = f"Temas tespit edilemedi ancak kaskta istikrarlı savrulma (Savrulma: {net_disp:.1f} > 150) var. Gerçek darbe."
                 else:
                     decision = self.GHOST_HIT
                     confidence = 0.8
-                    reasoning = f"Temas yok. Kaskta sarsıntı var ancak kafa savrulması yetersiz veya hatalı (Savrulma: {net_disp:.1f} <= 180). Ghost Hit."
+                    reasoning = f"Temas yok. Kaskta sarsıntı var ancak kafa savrulması yetersiz veya hatalı (Savrulma: {net_disp:.1f} <= 150). Ghost Hit."
 
         elif motion_type in ("evasion", "stationary"):
             if has_contact:
