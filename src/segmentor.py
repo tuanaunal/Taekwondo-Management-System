@@ -66,8 +66,13 @@ class EquipmentSegmentor:
                             elif blue_pixels > red_pixels and blue_pixels > 20:
                                 color_label = "blue"
                 
-                persons.append({"pts": pts, "color": color_label, "center_x": center_x})
+                box_area = (box[2] - box[0]) * (box[3] - box[1])
+                persons.append({"pts": pts, "color": color_label, "center_x": center_x, "box_area": box_area})
                 
+            # Sadece en büyük 2 bounding box'a sahip kişiyi (yani 2 sporcuyu) tut, hakem ve seyircileri ele!
+            persons.sort(key=lambda p: p["box_area"], reverse=True)
+            persons = persons[:2]
+            
             # Eğer renk bulamadıysa, son kırmızı pozisyonuna göre ayır
             if len(persons) == 2:
                 colors = [p["color"] for p in persons]
