@@ -94,13 +94,10 @@ class EquipmentSegmentor:
             red_person = next((p for p in persons if p["color"] == "red"), None)
             blue_person = next((p for p in persons if p["color"] == "blue"), None)
 
-            def get_best_foot(pts):
+            def get_all_feet(pts):
                 ankle_left, ankle_right = pts[15], pts[16]
                 ankles = [p for p in [ankle_left, ankle_right] if p[0] > 0 and p[1] > 0]
-                if ankles:
-                    ankles.sort(key=lambda p: p[1])
-                    return (int(ankles[0][0]), int(ankles[0][1]))
-                return None
+                return [(int(p[0]), int(p[1])) for p in ankles]
 
             def smooth_pt(new_pt, attr_name, max_jump=150, max_hold=10):
                 hist_pt = getattr(self, f"{attr_name}_hist", None)
@@ -109,7 +106,7 @@ class EquipmentSegmentor:
                 if new_pt is not None and hist_pt is not None:
                     dist = np.hypot(new_pt[0] - hist_pt[0], new_pt[1] - hist_pt[1])
                     if dist > max_jump:
-                        new_pt = None # Ani atlama reddedildi (Hakeme veya gürültüye kayma)
+                        new_pt = None # Ani atlama reddedildi
                 
                 if new_pt is not None:
                     setattr(self, f"{attr_name}_hist", new_pt)
@@ -122,46 +119,47 @@ class EquipmentSegmentor:
                     return None
 
             raw_red_helm = None
-            raw_red_foot = None
+            raw_red_feet = []
             raw_blue_helm = None
-            raw_blue_foot = None
+            raw_blue_feet = []
 
             if red_person:
                 self.last_red_x = red_person["center_x"]
                 pts = red_person["pts"]
                 if pts[0][0] > 0 and pts[0][1] > 0:
                     raw_red_helm = (int(pts[0][0]), int(pts[0][1]))
-                raw_red_foot = get_best_foot(pts)
+                raw_red_feet = get_all_feet(pts)
                 
             if blue_person:
                 pts = blue_person["pts"]
                 if pts[0][0] > 0 and pts[0][1] > 0:
                     raw_blue_helm = (int(pts[0][0]), int(pts[0][1]))
-                raw_blue_foot = get_best_foot(pts)
+                raw_blue_feet = get_all_feet(pts)
 
+            # Sadece Kasklar icin ziplama filtresi kullan (Kafalar 200 piksellik isinlanma yapamaz)
+            # Ayaklar ise saniyede cok hizli hareket ettigi (ucan tekme) icin filtrelemeden direkt gonderiyoruz!
             red_helmet_pt = smooth_pt(raw_red_helm, "red_helm", max_jump=200, max_hold=10)
-            red_foot_pt = smooth_pt(raw_red_foot, "red_foot", max_jump=200, max_hold=10)
             blue_helmet_pt = smooth_pt(raw_blue_helm, "blue_helm", max_jump=200, max_hold=10)
-            blue_foot_pt = smooth_pt(raw_blue_foot, "blue_foot", max_jump=200, max_hold=10)
 
         output = {}
         # Masks: 80px radius (160px total reach to catch overlapping hits)
-        output["red_helmet"] = self._create_fake_features(red_helmet_pt, h, w, radius=80)
-        output["red_foot"] = self._create_fake_features(red_foot_pt, h, w, radius=80)
-        output["blue_helmet"] = self._create_fake_features(blue_helmet_pt, h, w, radius=80)
-        output["blue_foot"] = self._create_fake_features(blue_foot_pt, h, w, radius=80)
-
-
+        output["red_helmet"] = self._create_fake_features([red_helmet_pt] if red_helmet_pt else [], h, w, radius=80)
+        output["red_foot"] = self._create_fake_features(raw_red_feet, h, w, radius=80)
+        output["blue_helmet"] = self._create_fake_features([blue_helmet_pt] if blue_helmet_pt else [], h, w, radius=80)
+        output["blue_foot"] = self._create_fake_features(raw_blue_feet, h, w, radius=80)
         
         return output
 
-    def _create_fake_features(self, pt, h, w, radius):
+    def _create_fake_features(self, pts_list, h, w, radius):
         mask = np.zeros((h, w), dtype=np.uint8)
         contours = []
         centroids = []
         
-        # Eğer nokta None değilse ve (0,0) değilse çiz
-        if pt is not None and (pt[0] > 0 or pt[1] > 0):
+        if not isinstance(pts_list, list):
+            pts_list = [pts_list]
+            
+        for pt in pts_list:
+            if pt is not None and (pt[0] > 0 or pt[1] > 0):
             cv2.circle(mask, pt, radius, 255, -1)
             # Dairesel bir contour oluştur
             pts = []
