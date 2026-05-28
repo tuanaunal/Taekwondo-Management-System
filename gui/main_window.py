@@ -437,7 +437,7 @@ class MainWindow(QMainWindow):
     # RAPOR
     # ────────────────────────────────────
     def _save_report(self):
-        \"\"\"Analiz raporunu PDF olarak Masaüstüne kaydeder.\"\"\"
+        """Analiz raporunu PDF olarak Masaüstüne kaydeder."""
         if not hasattr(self, "_last_result"):
             QMessageBox.information(self, "Bilgi", "Henüz analiz yapılmadı.")
             return
@@ -487,7 +487,7 @@ class MainWindow(QMainWindow):
                 tr_map = {'ı':'i', 'i':'i', 'ş':'s', 'Ş':'S', 'ğ':'g', 'Ğ':'G', 'ü':'u', 'Ü':'U', 'ö':'o', 'Ö':'O', 'ç':'c', 'Ç':'C'}
                 clean_text = "".join([tr_map.get(c, c) for c in report_text])
                 
-                for line in clean_text.split('\\n'):
+                for line in clean_text.split('\n'):
                     if "---" in line or "===" in line:
                         pdf.set_font("Arial", 'B', 12)
                         pdf.set_text_color(31, 111, 235) # Mavi başlık
