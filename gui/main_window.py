@@ -483,9 +483,10 @@ class MainWindow(QMainWindow):
                 pdf.set_font("Arial", size=11)
                 pdf.set_text_color(40, 40, 40)
                 
-                # Türkçe karakterleri İngilizce eşdeğerlerine çevir (FPDF standart font uyumluluğu için)
+                # Türkçe ve özel karakterleri İngilizce eşdeğerlerine çevir (FPDF standart font uyumluluğu için)
                 tr_map = {'ı':'i', 'i':'i', 'ş':'s', 'Ş':'S', 'ğ':'g', 'Ğ':'G', 'ü':'u', 'Ü':'U', 'ö':'o', 'Ö':'O', 'ç':'c', 'Ç':'C'}
                 clean_text = "".join([tr_map.get(c, c) for c in report_text])
+                clean_text = clean_text.replace('\u2014', '-').replace('\u2013', '-').replace('—', '-').replace('–', '-')
                 
                 for line in clean_text.split('\n'):
                     if "---" in line or "===" in line:
