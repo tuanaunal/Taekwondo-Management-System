@@ -167,3 +167,28 @@ class EquipmentSegmentor:
             centroids.append(pt)
             
         return {"mask": mask, "contours": contours, "centroids": centroids}
+
+    def draw_segmentation(self, frame: np.ndarray, seg_results: dict, alpha: float = 0.5) -> np.ndarray:
+        """GUI icin segmentasyon maskelerini ve centroidleri cizer."""
+        overlay = frame.copy()
+        
+        colors = {
+            "red_helmet": (0, 0, 255),
+            "red_foot": (0, 0, 255),
+            "blue_helmet": (255, 0, 0),
+            "blue_foot": (255, 0, 0)
+        }
+        
+        for key, color in colors.items():
+            if key in seg_results:
+                mask = seg_results[key].get("mask")
+                if mask is not None:
+                    colored_mask = np.zeros_like(frame)
+                    colored_mask[mask > 0] = color
+                    cv2.addWeighted(colored_mask, alpha, overlay, 1 - alpha, 0, overlay)
+                
+                centroids = seg_results[key].get("centroids", [])
+                for cx, cy in centroids:
+                    cv2.circle(overlay, (cx, cy), 5, (0, 255, 0), -1)
+                    
+        return overlay
