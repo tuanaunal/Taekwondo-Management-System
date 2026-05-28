@@ -90,6 +90,8 @@ def run_batch_analysis():
                 net_disp = result["kinematic_result"].get("net_displacement", 0)
                 max_acc = result["kinematic_result"].get("max_acceleration", 0)
                 kinetic_energy = (net_disp * 1.5) + (max_acc * 0.5)
+                min_distance = result["contact_summary"].get("min_distance", float("inf"))
+                max_overlap = result["contact_summary"].get("max_overlap", 0)
 
                 all_results.append({
                     "video": video_name,
@@ -100,7 +102,9 @@ def run_batch_analysis():
                     "graph_path": result.get("graph_path", ""),
                     "net_disp": net_disp,
                     "max_acc": max_acc,
-                    "kinetic_energy": kinetic_energy
+                    "kinetic_energy": kinetic_energy,
+                    "min_distance": min_distance,
+                    "max_overlap": max_overlap
                 })
 
                 print(f"    {indicator} {label_tr} (güven: {confidence:.1%})")
@@ -155,9 +159,9 @@ def run_batch_analysis():
     # Sadece CSV formatında raporlama
     csv_path = os.path.join(REPORTS_DIR, "batch_summary_detailed.csv")
     with open(csv_path, "w", encoding="utf-8") as f:
-        f.write("video,true_label,predicted,label_tr,confidence,net_disp,max_acc,kinetic_energy,graph_path\n")
+        f.write("video,true_label,predicted,label_tr,confidence,net_disp,max_acc,kinetic_energy,min_distance,max_overlap,graph_path\n")
         for r in all_results:
-            f.write(f"{r['video']},{r['true_label']},{r['predicted']},{r['label_tr']},{r['confidence']},{r['net_disp']},{r['max_acc']},{r['kinetic_energy']},{r['graph_path']}\n")
+            f.write(f"{r['video']},{r['true_label']},{r['predicted']},{r['label_tr']},{r['confidence']},{r['net_disp']},{r['max_acc']},{r['kinetic_energy']},{r['min_distance']},{r['max_overlap']},{r['graph_path']}\n")
 
     print("\n" + "="*60)
     print("  Toplu analiz tamamlandı!")
