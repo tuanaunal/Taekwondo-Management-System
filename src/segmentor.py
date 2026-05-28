@@ -160,18 +160,18 @@ class EquipmentSegmentor:
             
         for pt in pts_list:
             if pt is not None and (pt[0] > 0 or pt[1] > 0):
-            cv2.circle(mask, pt, radius, 255, -1)
-            # Dairesel bir contour oluştur
-            pts = []
-            for angle in range(0, 360, 10):
-                x = int(pt[0] + radius * np.cos(np.radians(angle)))
-                y = int(pt[1] + radius * np.sin(np.radians(angle)))
-                if 0 <= x < w and 0 <= y < h:
-                    pts.append([[x, y]])
-            if pts:
-                contours.append(np.array(pts, dtype=np.int32))
-            centroids.append(pt)
-            
+                cv2.circle(mask, pt, radius, 255, -1)
+                # Dairesel bir contour oluştur
+                pts = []
+                for angle in range(0, 360, 10):
+                    x = int(pt[0] + radius * np.cos(np.radians(angle)))
+                    y = int(pt[1] + radius * np.sin(np.radians(angle)))
+                    if 0 <= x < w and 0 <= y < h:
+                        pts.append([[x, y]])
+                if pts:
+                    contours.append(np.array(pts, dtype=np.int32))
+                centroids.append(pt)
+                
         return {"mask": mask, "contours": contours, "centroids": centroids}
 
     def draw_segmentation(self, frame: np.ndarray, seg_results: dict, alpha: float = 0.5) -> np.ndarray:
