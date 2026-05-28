@@ -488,6 +488,9 @@ class MainWindow(QMainWindow):
                 clean_text = "".join([tr_map.get(c, c) for c in report_text])
                 clean_text = clean_text.replace('\u2014', '-').replace('\u2013', '-').replace('—', '-').replace('–', '-')
                 
+                # PDF fontu emoji desteklemediği için Latin-1'e uymayan tüm emojileri ve sembolleri filtrele
+                clean_text = clean_text.encode('latin-1', 'ignore').decode('latin-1')
+                
                 for line in clean_text.split('\n'):
                     if "---" in line or "===" in line:
                         pdf.set_font("Arial", 'B', 12)
