@@ -409,42 +409,19 @@ class MainWindow(QMainWindow):
 
         # Overlay karelerini video oynatıcıya aktar
         overlay_frames = result.pop("overlay_frames", [])
-        if overlay_frames:
-            self.video_player.set_overlay_frames(overlay_frames)
-
-        # Sonuçları panelde göster
-        self.result_panel.display_results(result)
-
-        # Analiz sonucunu sakla
-        self._last_result = result
-
-        decision = result.get("decision_result", {})
-        label_tr = decision.get("label_tr", "")
-        confidence = decision.get("confidence", 0)
-
-        self.status_bar.showMessage(
-            f"Analiz tamamlandı! Sonuç: {label_tr} (güven: {confidence:.1%})"
-        )
-
-    def _on_analysis_error(self, error_msg: str):
-        self.progress_bar.setVisible(False)
-        self.btn_analyze.setEnabled(True)
-        self.btn_open.setEnabled(True)
-        self.status_bar.showMessage(f"Hata: {error_msg}")
-        QMessageBox.critical(self, "Analiz Hatası", f"Analiz sırasında hata oluştu:\n\n{error_msg}")
-
-    # ────────────────────────────────────
-    # RAPOR
-    # ────────────────────────────────────
-    def _save_report(self):
-        """Analiz raporunu PDF olarak Masaüstüne kaydeder."""
+        if overlay_    def _save_report(self):
+        \"\"\"Analiz raporunu PDF olarak Masaüstüne kaydeder.\"\"\"
         if not hasattr(self, "_last_result"):
             QMessageBox.information(self, "Bilgi", "Henüz analiz yapılmadı.")
             return
 
         from src.decision_engine import DecisionEngine
         engine = DecisionEngine()
-        report_text = engine.format_report(self._last_result["decision_result"])
+        
+        # Ham verileri al
+        decision = self._last_result.get("decision_result", {})
+        contact = self._last_result.get("contact_summary", {})
+        kinematic = self._last_result.get("kinematic_result", {})
 
         # Masaüstü yolunu bul
         desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
@@ -462,31 +439,121 @@ class MainWindow(QMainWindow):
         if file_path:
             try:
                 from fpdf import FPDF
+                from datetime import datetime
                 
                 class PDFReport(FPDF):
                     def header(self):
-                        self.set_font('Arial', 'B', 15)
-                        self.set_text_color(233, 69, 96) # #e94560 renk
-                        self.cell(0, 10, 'TAEKWONDO GHOST HIT - ANALIZ RAPORU', 0, 1, 'C')
-                        self.set_draw_color(233, 69, 96)
-                        self.line(10, 20, 200, 20)
-                        self.ln(10)
+                        # Logo/Başlık Arka Planı
+                        self.set_fill_color(22, 33, 62)
+                        self.rect(0, 0, 210, 30, 'F')
+                        
+                        self.set_font('Arial', 'B', 18)
+                        self.set_text_color(255, 255, 255)
+                        self.cell(0, 15, 'TAEKWONDO GHOST HIT DETECTION', 0, 1, 'C')
+                        
+                        self.set_font('Arial', '', 10)
+                        self.set_text_color(200, 200, 200)
+                        self.cell(0, 5, 'Resmi Karar Destek Sistemi Analiz Raporu', 0, 1, 'C')
+                        self.ln(15)
                         
                     def footer(self):
                         self.set_y(-15)
                         self.set_font('Arial', 'I', 8)
                         self.set_text_color(128, 128, 128)
-                        self.cell(0, 10, f'Sayfa {self.page_no()}', 0, 0, 'C')
+                        self.cell(0, 10, f'Sayfa {self.page_no()} | Tarih: {datetime.now().strftime("%d-%m-%Y %H:%M")}', 0, 0, 'C')
 
                 pdf = PDFReport()
                 pdf.add_page()
-                pdf.set_font("Arial", size=11)
-                pdf.set_text_color(40, 40, 40)
                 
-                # Türkçe ve özel karakterleri İngilizce eşdeğerlerine çevir (FPDF standart font uyumluluğu için)
-                tr_map = {'ı':'i', 'i':'i', 'ş':'s', 'Ş':'S', 'ğ':'g', 'Ğ':'G', 'ü':'u', 'Ü':'U', 'ö':'o', 'Ö':'O', 'ç':'c', 'Ç':'C'}
-                clean_text = "".join([tr_map.get(c, c) for c in report_text])
-                clean_text = clean_text.replace('\u2014', '-').replace('\u2013', '-').replace('—', '-').replace('–', '-')
+                def safe_text(text):
+                    tr_map = {'ı':'i', 'i':'i', 'ş':'s', 'Ş':'S', 'ğ':'g', 'Ğ':'G', 'ü':'u', 'Ü':'U', 'ö':'o', 'Ö':'O', 'ç':'c', 'Ç':'C'}
+                    clean = "".join([tr_map.get(c, str(c)) for c in str(text)])
+                    return clean.encode('latin-1', 'ignore').decode('latin-1')
+
+                # KARAR KUTUSU
+                decision_label = decision.get('label_tr', 'Bilinmiyor')
+                confidence = decision.get('confidence', 0.0) * 100
+                
+                if "Ghost" in decision_label:
+                    pdf.set_fill_color(255, 235, 238) # Açık kırmızı
+                    pdf.set_text_color(198, 40, 40)   # Koyu kırmızı
+                else:
+                    pdf.set_fill_color(232, 245, 233) # Açık yeşil
+                    pdf.set_text_color(46, 125, 50)   # Koyu yeşil
+                
+                pdf.set_font("Arial", 'B', 14)
+                pdf.cell(0, 15, safe_text(f"  Nihai Karar: {decision_label} (Guven Orani: %{confidence:.1f})"), 0, 1, 'L', fill=True)
+                pdf.ln(5)
+
+                # GEREKÇE (REASONING)
+                pdf.set_font("Arial", 'B', 12)
+                pdf.set_text_color(33, 37, 41)
+                pdf.cell(0, 10, "Gerekce:", 0, 1)
+                
+                pdf.set_font("Arial", '', 11)
+                pdf.set_text_color(73, 80, 87)
+                pdf.multi_cell(0, 6, safe_text(decision.get('reasoning', '')))
+                pdf.ln(10)
+                
+                # ÇİZGİ
+                pdf.set_draw_color(206, 212, 218)
+                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+                pdf.ln(10)
+
+                # DETAYLAR BÖLÜMÜ (2 SÜTUN)
+                pdf.set_font("Arial", 'B', 12)
+                pdf.set_text_color(33, 37, 41)
+                pdf.cell(0, 10, "Teknik Analiz Detaylari:", 0, 1)
+                pdf.ln(2)
+                
+                # Temas ve Kinematik tabloları yan yana
+                y_start = pdf.get_y()
+                
+                # Sol Sütun (Temas Analizi)
+                pdf.set_fill_color(248, 249, 250)
+                pdf.rect(10, y_start, 90, 60, 'F')
+                
+                pdf.set_font("Arial", 'B', 10)
+                pdf.set_text_color(22, 33, 62)
+                pdf.set_xy(12, y_start + 2)
+                pdf.cell(86, 8, "Temas Verileri", 0, 1)
+                
+                pdf.set_font("Arial", '', 10)
+                pdf.set_text_color(73, 80, 87)
+                
+                def add_row(x, y, k, v):
+                    pdf.set_xy(x, y)
+                    pdf.set_font("Arial", 'B', 9)
+                    pdf.cell(40, 8, safe_text(k))
+                    pdf.set_font("Arial", '', 9)
+                    pdf.cell(40, 8, safe_text(v))
+                
+                add_row(12, y_start + 12, "Toplam Kare:", f"{contact.get('total_frames', 0)}")
+                add_row(12, y_start + 20, "Temasli Kare:", f"{contact.get('frames_with_contact', 0)}")
+                add_row(12, y_start + 28, "Yakin Gecis:", f"{contact.get('frames_near_miss', 0)}")
+                add_row(12, y_start + 36, "Maks Cakisma:", f"{contact.get('max_overlap_px', 0)} px")
+                min_dist = contact.get('min_distance_px', float('inf'))
+                add_row(12, y_start + 44, "Min Mesafe:", f"{min_dist:.1f} px" if min_dist < 1e6 else "N/A")
+                
+                # Sağ Sütun (Kinematik Analiz)
+                pdf.set_fill_color(248, 249, 250)
+                pdf.rect(110, y_start, 90, 60, 'F')
+                
+                pdf.set_font("Arial", 'B', 10)
+                pdf.set_text_color(22, 33, 62)
+                pdf.set_xy(112, y_start + 2)
+                pdf.cell(86, 8, "Kinematik Verileri", 0, 1)
+                
+                add_row(112, y_start + 12, "Hareket Tipi:", f"{kinematic.get('motion_class', 'N/A').upper()}")
+                add_row(112, y_start + 20, "Maks Ivme:", f"{kinematic.get('max_accel', 0):.1f} px/s^2")
+                add_row(112, y_start + 28, "Ivme Tepe Karesi:", f"{kinematic.get('accel_peak_frame', 'N/A')}")
+                add_row(112, y_start + 36, "Varyasyon (CV):", f"{kinematic.get('accel_cv', 0):.2f}")
+                
+                pdf.output(file_path)
+                self.status_bar.showMessage(f"PDF Raporu kaydedildi: {file_path}")
+                QMessageBox.information(self, "Başarılı", f"Resmi PDF Raporu Başarıyla Oluşturuldu!\\n\\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Hata", f"PDF oluşturulurken hata meydana geldi:\\n{str(e)}")', '-').replace('–', '-')
                 
                 # PDF fontu emoji desteklemediği için Latin-1'e uymayan tüm emojileri ve sembolleri filtrele
                 clean_text = clean_text.encode('latin-1', 'ignore').decode('latin-1')
