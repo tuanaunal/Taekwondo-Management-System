@@ -1,35 +1,67 @@
-# Taekwondo Impact Analysis System (Ghost Hit Detection)
+# Taekwondo Ghost Hit Detection System 🥋🤖
 
-This repository contains a computer vision-based analysis system developed to differentiate between genuine impacts (Real Hits) and sensor-triggered helmet tremors (Ghost Hits) in Taekwondo competitions.
+Bu proje, Taekwondo müsabakalarında yaşanan kask sensörü hatalarını (Ghost Hit - Hayalet Darbe) tespit etmek ve gerçek darbeleri (Real Hit) ayırt etmek amacıyla geliştirilmiş yapay zeka destekli, resmi bir **Karar Destek Sistemi (Decision Support System)**'dir.
 
-## Project Description
+## 🚀 Proje Hakkında
 
-The system utilizes digital image processing and object tracking techniques to analyze the movement patterns of helmets. By calculating velocity and acceleration data from video footage, the project aims to provide objective decision support for competition scoring and referee evaluations.
+Müsabakalarda bazen sporcuların kaskları, bir tekme veya temas olmamasına rağmen ani hareketler veya savrulmalar sebebiyle darbe sensörünü tetiklemektedir. Bu durum hakemleri yanıltarak haksız puanlama (Ghost Hit) yaşanmasına neden olur.
 
-## Current Development Phase: Analysis and Tracking
+Bu sistem, gelişmiş Görüntü İşleme (OpenCV) ve Obje Takibi algoritmalarını (YOLOv8 Pose & Segmentasyon) birleştirerek **"Çift Ayak ve Kask Takibi (Dual Foot Tracking)"** yapar. Gerçekleşen olayı sadece piksellerle değil, matematiksel ve kinematik temellere dayandırarak çözümler.
 
-The project has successfully completed the data preparation and preprocessing stages. Current efforts are focused on the integration of object tracking algorithms and kinematic data extraction.
+---
 
-## Technical Specifications
+## 🧠 Mantıksal Mimari ve Beyin (Decision Engine)
 
-- **Programming Language:** Python
-- **Primary Frameworks:** OpenCV, NumPy, MoviePy
-- **Data Standardization:** Automatic conversion to 720p resolution and 30 FPS.
-- **Image Preprocessing:** - Contrast Limited Adaptive Histogram Equalization (CLAHE) for illumination stabilization.
-  - Region of Interest (ROI) filtering to enhance processing efficiency and reduce noise.
+Sistem ezbere dayalı bir yapı değil, **dinamik** bir karar mekanizmasıdır. Videodaki hareketleri kare kare işleyerek kendi kararını kendi verir:
 
-## Installation and Setup
+1. **Çift Ayak Takibi (Dual Foot Tracking):** Sadece vuran ayağı değil, sporcuların **iki ayağını birden** tespit edip, kaska en yakın (tehlike potansiyeli yüksek) olan ayağı dinamik olarak filtreler.
+2. **Öklid (Euclidean) Mesafe Analizi:** Ayak ile kask arasındaki mesafeyi sürekli ölçer. Hızlı tekmelerde (Bulanıklık/Motion Blur) ayak tespit edilemese bile "Son Bilinen Konum" (Last Known Position) üzerinden kinematik tahmin yürütür.
+3. **Piksel Çakışması (Overlap):** Kask ve ayak bölgelerinin matematiksel olarak ne kadar iç içe girdiğini hesaplar.
+4. **Kinematik Analiz:** Kafadaki savrulmanın ivmesini (px/s²) hesaplar. Sensörü tetikleyen şeyin gerçekten bir darbe mi yoksa sadece kafayı sertçe çevirmek mi olduğunu ivme profiliyle anlar.
 
-1. Clone the repository:
+Bu veriler harmanlanır ve sistem kesin kararını verir: **REAL HIT (Gerçek Darbe) veya GHOST HIT (Hayalet Darbe)**.
+
+---
+
+## ✨ Modern Arayüz ve Raporlama (GUI)
+
+Proje sadece arka planda çalışan bir kod değil, aynı zamanda müsabaka sırasında rahatlıkla kullanılabilecek **Premium bir Arayüze** sahiptir:
+
+- **Siber Tasarım (Dark Mode):** Rounded (yuvarlatılmış) hatlar, interaktif hover efektleri ve şık veri kutuları (GroupBox).
+- **Gerçek Zamanlı Analiz Grafikleri:** O anki ivme hızını ve ayak-kask mesafesini saniye saniye çizen grafik ekranı.
+- **Dinamik Video Oynatıcı:** İstediğin kareye saniye saniye gidebileceğin ve analiz bitince otomatik başa saran akıllı Player.
+- **Resmi PDF Rapor Çıktısı (fpdf):** Analiz tamamlandığında "Rapor Kaydet" butonuna tıklandığında Masaüstüne resmi, A4 boyutunda, sayfa numaralı, kurumsal bir **"TAEKWONDO GHOST HIT - ANALİZ RAPORU"** PDF'i çıkartır.
+
+---
+
+## 🛠️ Kurulum ve Kullanım
+
+### Gereksinimler
+- Python 3.8+
+- OpenCV, PyQt5, matplotlib, fpdf, numpy
+
+### Kurulum
+1. Repoyu bilgisayarınıza klonlayın:
+   ```bash
    git clone https://github.com/tuanaunal/Taekwondo-Management-System.git
+   ```
+2. Gerekli Python kütüphanelerini kurun:
+   ```bash
+   pip install -r requirements.txt
+   ```
+   *(Eğer gereksinim dosyası yoksa: `pip install opencv-python PyQt5 matplotlib fpdf numpy`)*
 
-2. Install the required dependencies:
-   pip install opencv-python numpy moviepy
+### Çalıştırma
+Sistemi modern arayüz ile başlatmak için terminalden şu komutu çalıştırmanız yeterlidir:
+```bash
+python main.py
+```
+Açılan pencerede **"Video Yükle"** diyerek `.mp4` formatındaki müsabaka kaydını seçip, **"Analizi Başlat"** butonuyla sistemi harekete geçirebilirsiniz.
 
-3. Usage:
-   - Run `standardize.py` to prepare the dataset.
-   - Run `main.py` to execute the analysis pipeline.
+---
 
-## Data Privacy and Constraints
+## 🔒 Veri Gizliliği
 
-Due to privacy regulations and file size limitations, the video dataset used for this project is not included in the public repository.
+KVKK ve yarışma mahremiyeti kuralları gereği, projede test amacıyla kullanılan asıl müsabaka videoları bu açık kaynak repository üzerinde paylaşılmamıştır.
+
+**Geliştirici:** Tuana Ünal
