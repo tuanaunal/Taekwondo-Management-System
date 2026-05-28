@@ -73,10 +73,10 @@ class EquipmentSegmentor:
             persons.sort(key=lambda p: p["box_area"], reverse=True)
             persons = persons[:2]
             
-            # Eğer renk bulamadıysa, son kırmızı pozisyonuna göre ayır
+            # Eğer renk bulamadıysa VEYA her ikisine de aynı rengi verdiyse, pozisyon geçmişine göre ayır
             if len(persons) == 2:
                 colors = [p["color"] for p in persons]
-                if colors.count("unknown") > 0:
+                if colors.count("unknown") > 0 or colors[0] == colors[1]:
                     persons.sort(key=lambda p: p["center_x"])
                     if self.last_red_x is not None:
                         dist0 = abs(persons[0]["center_x"] - self.last_red_x)
