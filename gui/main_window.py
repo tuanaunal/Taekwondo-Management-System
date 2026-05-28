@@ -409,8 +409,35 @@ class MainWindow(QMainWindow):
 
         # Overlay karelerini video oynatıcıya aktar
         overlay_frames = result.pop("overlay_frames", [])
-        if overlay_    def _save_report(self):
-        \"\"\"Analiz raporunu PDF olarak Masaüstüne kaydeder.\"\"\"
+        if overlay_frames:
+            self.video_player.set_overlay_frames(overlay_frames)
+
+        # Sonuçları panelde göster
+        self.result_panel.display_results(result)
+
+        # Analiz sonucunu sakla
+        self._last_result = result
+
+        decision = result.get("decision_result", {})
+        label_tr = decision.get("label_tr", "")
+        confidence = decision.get("confidence", 0)
+
+        self.status_bar.showMessage(
+            f"Analiz tamamlandı! Sonuç: {label_tr} (güven: {confidence:.1%})"
+        )
+
+    def _on_analysis_error(self, error_msg: str):
+        self.progress_bar.setVisible(False)
+        self.btn_analyze.setEnabled(True)
+        self.btn_open.setEnabled(True)
+        self.status_bar.showMessage(f"Hata: {error_msg}")
+        QMessageBox.critical(self, "Analiz Hatası", f"Analiz sırasında hata oluştu:\n\n{error_msg}")
+
+    # ────────────────────────────────────
+    # RAPOR
+    # ────────────────────────────────────
+    def _save_report(self):
+        """Analiz raporunu PDF olarak Masaüstüne kaydeder."""
         if not hasattr(self, "_last_result"):
             QMessageBox.information(self, "Bilgi", "Henüz analiz yapılmadı.")
             return
