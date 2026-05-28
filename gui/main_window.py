@@ -125,13 +125,13 @@ class MainWindow(QMainWindow):
                 font-family: 'Segoe UI', 'Arial', sans-serif;
             }
             QGroupBox {
-                font-size: 12px;
+                font-size: 13px;
                 font-weight: bold;
                 color: #58a6ff;
-                border: 2px solid #21262d;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 18px;
+                border: 2px solid #30363d;
+                border-radius: 10px;
+                margin-top: 12px;
+                padding-top: 20px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -437,7 +437,7 @@ class MainWindow(QMainWindow):
     # RAPOR
     # ────────────────────────────────────
     def _save_report(self):
-        """Analiz raporunu dosyaya kaydeder."""
+        \"\"\"Analiz raporunu PDF olarak Masaüstüne kaydeder.\"\"\"
         if not hasattr(self, "_last_result"):
             QMessageBox.information(self, "Bilgi", "Henüz analiz yapılmadı.")
             return
@@ -446,20 +446,59 @@ class MainWindow(QMainWindow):
         engine = DecisionEngine()
         report_text = engine.format_report(self._last_result["decision_result"])
 
-        # Dosya kaydet diyalogu
+        # Masaüstü yolunu bul
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
         default_name = os.path.splitext(
             os.path.basename(self.current_video_path or "report")
-        )[0] + "_rapor.txt"
+        )[0] + "_Rapor.pdf"
 
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Rapor Kaydet",
-            os.path.join(REPORTS_DIR, default_name),
-            "Metin Dosyası (*.txt);;Tüm Dosyalar (*)",
+            "PDF Raporunu Kaydet",
+            os.path.join(desktop_path, default_name),
+            "PDF Dosyası (*.pdf);;Tüm Dosyalar (*)",
         )
 
         if file_path:
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(report_text)
-            self.status_bar.showMessage(f"Rapor kaydedildi: {file_path}")
-            QMessageBox.information(self, "Başarılı", f"Rapor kaydedildi:\n{file_path}")
+            try:
+                from fpdf import FPDF
+                
+                class PDFReport(FPDF):
+                    def header(self):
+                        self.set_font('Arial', 'B', 15)
+                        self.set_text_color(233, 69, 96) # #e94560 renk
+                        self.cell(0, 10, 'TAEKWONDO GHOST HIT - ANALIZ RAPORU', 0, 1, 'C')
+                        self.set_draw_color(233, 69, 96)
+                        self.line(10, 20, 200, 20)
+                        self.ln(10)
+                        
+                    def footer(self):
+                        self.set_y(-15)
+                        self.set_font('Arial', 'I', 8)
+                        self.set_text_color(128, 128, 128)
+                        self.cell(0, 10, f'Sayfa {self.page_no()}', 0, 0, 'C')
+
+                pdf = PDFReport()
+                pdf.add_page()
+                pdf.set_font("Arial", size=11)
+                pdf.set_text_color(40, 40, 40)
+                
+                # Türkçe karakterleri İngilizce eşdeğerlerine çevir (FPDF standart font uyumluluğu için)
+                tr_map = {'ı':'i', 'i':'i', 'ş':'s', 'Ş':'S', 'ğ':'g', 'Ğ':'G', 'ü':'u', 'Ü':'U', 'ö':'o', 'Ö':'O', 'ç':'c', 'Ç':'C'}
+                clean_text = "".join([tr_map.get(c, c) for c in report_text])
+                
+                for line in clean_text.split('\\n'):
+                    if "---" in line or "===" in line:
+                        pdf.set_font("Arial", 'B', 12)
+                        pdf.set_text_color(31, 111, 235) # Mavi başlık
+                        pdf.cell(0, 10, txt=line, ln=1)
+                        pdf.set_font("Arial", size=11)
+                        pdf.set_text_color(40, 40, 40)
+                    else:
+                        pdf.multi_cell(0, 8, txt=line)
+                
+                pdf.output(file_path)
+                self.status_bar.showMessage(f"PDF Raporu kaydedildi: {file_path}")
+                QMessageBox.information(self, "Başarılı", f"PDF Raporu Başarıyla Oluşturuldu!\\n\\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Hata", f"PDF oluşturulurken hata meydana geldi:\\n{str(e)}")

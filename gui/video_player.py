@@ -204,20 +204,23 @@ class VideoPlayerWidget(QWidget):
 
         btn_style = """
             QPushButton {
-                background-color: #16213e;
+                background-color: #1a1a2e;
                 color: #e0e0e0;
-                border: 1px solid #0f3460;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
+                border: 2px solid #0f3460;
+                border-radius: 8px;
+                padding: 10px 18px;
+                font-size: 13px;
                 font-weight: bold;
             }
             QPushButton:hover {
                 background-color: #0f3460;
                 border-color: #e94560;
+                color: white;
             }
             QPushButton:pressed {
                 background-color: #e94560;
+                border-color: #e94560;
+                color: white;
             }
         """
 
@@ -463,6 +466,10 @@ class VideoPlayerWidget(QWidget):
     def play(self):
         if self.total_frames == 0:
             return
+        if self.current_frame >= self.total_frames - 1:
+            self.current_frame = 0  # Başa sar
+            self._display_frame(0)
+            self.slider.setValue(0)
         self.playing = True
         self.btn_play.setText("⏸ Durdur")
         interval = max(1, int(1000 / self.fps / self.speed))
@@ -483,10 +490,13 @@ class VideoPlayerWidget(QWidget):
     def next_frame(self):
         if self.current_frame < self.total_frames - 1:
             self.current_frame += 1
-            self._display_frame(self.current_frame)
-            self.slider.blockSignals(True)
-            self.slider.setValue(self.current_frame)
-            self.slider.blockSignals(False)
+        else:
+            self.current_frame = 0  # Başa sar
+        
+        self._display_frame(self.current_frame)
+        self.slider.blockSignals(True)
+        self.slider.setValue(self.current_frame)
+        self.slider.blockSignals(False)
 
     def prev_frame(self):
         if self.current_frame > 0:

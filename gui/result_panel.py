@@ -60,8 +60,8 @@ class ResultPanel(QWidget):
 
         self.decision_label = QLabel("Analiz bekleniyor...")
         self.decision_label.setAlignment(Qt.AlignCenter)
-        self.decision_label.setFont(QFont("Segoe UI", 16, QFont.Bold))
-        self.decision_label.setStyleSheet("color: #8899aa; padding: 10px;")
+        self.decision_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
+        self.decision_label.setStyleSheet("color: #8899aa; padding: 15px; background-color: #16213e; border-radius: 8px;")
         dec_layout.addWidget(self.decision_label)
 
         self.confidence_label = QLabel("")
@@ -207,7 +207,7 @@ class ResultPanel(QWidget):
 
         self.decision_label.setText(f"{indicator}  {label_tr}")
         self.decision_label.setStyleSheet(
-            f"color: {color}; padding: 10px; font-size: 18px;"
+            f"color: {color}; padding: 15px; font-size: 26px; font-weight: 900; background-color: {color}15; border-radius: 8px; border: 1px solid {color}30;"
         )
         self.confidence_label.setText(f"Güven: {confidence:.1%}")
         self.confidence_label.setStyleSheet(f"color: {color};")
@@ -318,9 +318,9 @@ class ResultPanel(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
     def clear(self):
-        """Paneli temizler."""
+        \"\"\"Paneli temizler.\"\"\"
         self.decision_label.setText("Analiz bekleniyor...")
-        self.decision_label.setStyleSheet("color: #8899aa; padding: 10px;")
+        self.decision_label.setStyleSheet("color: #8899aa; padding: 15px; background-color: #16213e; border-radius: 8px;")
         self.confidence_label.setText("")
         self.reasoning_label.setText("")
         self.figure.clear()
