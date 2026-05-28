@@ -96,50 +96,53 @@ class EquipmentSegmentor:
 
             def get_best_foot(pts):
                 ankle_left, ankle_right = pts[15], pts[16]
-                knee_left, knee_right = pts[13], pts[14]
-                
-                # 1. Try Ankles (highest one)
                 ankles = [p for p in [ankle_left, ankle_right] if p[0] > 0 and p[1] > 0]
                 if ankles:
                     ankles.sort(key=lambda p: p[1])
-                    return (int(ankles[0][0]), int(ankles[0][1])), "ankle"
-                    
-                # We NO LONGER fallback to Knees or Hips!
-                # Falling back to Knees/Hips creates fake "distances" that ruin proximity rules.
-                # Instead, we will return None and let the history-holder keep the last position!
-                return None, "none"
+                    return (int(ankles[0][0]), int(ankles[0][1]))
+                return None
+
+            def smooth_pt(new_pt, attr_name, max_jump=150, max_hold=10):
+                hist_pt = getattr(self, f"{attr_name}_hist", None)
+                lost_frames = getattr(self, f"{attr_name}_lost", 0)
+                
+                if new_pt is not None and hist_pt is not None:
+                    dist = np.hypot(new_pt[0] - hist_pt[0], new_pt[1] - hist_pt[1])
+                    if dist > max_jump:
+                        new_pt = None # Ani atlama reddedildi (Hakeme veya gürültüye kayma)
+                
+                if new_pt is not None:
+                    setattr(self, f"{attr_name}_hist", new_pt)
+                    setattr(self, f"{attr_name}_lost", 0)
+                    return new_pt
+                else:
+                    if hist_pt is not None and lost_frames < max_hold:
+                        setattr(self, f"{attr_name}_lost", lost_frames + 1)
+                        return hist_pt
+                    return None
+
+            raw_red_helm = None
+            raw_red_foot = None
+            raw_blue_helm = None
+            raw_blue_foot = None
 
             if red_person:
                 self.last_red_x = red_person["center_x"]
                 pts = red_person["pts"]
                 if pts[0][0] > 0 and pts[0][1] > 0:
-                    red_helmet_pt = (int(pts[0][0]), int(pts[0][1]))
+                    raw_red_helm = (int(pts[0][0]), int(pts[0][1]))
+                raw_red_foot = get_best_foot(pts)
                 
-                foot_pt, label = get_best_foot(pts)
-                if foot_pt:
-                    red_foot_pt = foot_pt
-                    self.red_foot_history = foot_pt
-                    self.red_foot_lost_frames = 0
-                else:
-                    # Hold last known position for up to 5 frames (occlusion fix)
-                    if hasattr(self, 'red_foot_history') and self.red_foot_lost_frames < 5:
-                        red_foot_pt = self.red_foot_history
-                        self.red_foot_lost_frames += 1
-                    
             if blue_person:
                 pts = blue_person["pts"]
                 if pts[0][0] > 0 and pts[0][1] > 0:
-                    blue_helmet_pt = (int(pts[0][0]), int(pts[0][1]))
-                
-                foot_pt, label = get_best_foot(pts)
-                if foot_pt:
-                    blue_foot_pt = foot_pt
-                    self.blue_foot_history = foot_pt
-                    self.blue_foot_lost_frames = 0
-                else:
-                    if hasattr(self, 'blue_foot_history') and self.blue_foot_lost_frames < 5:
-                        blue_foot_pt = self.blue_foot_history
-                        self.blue_foot_lost_frames += 1
+                    raw_blue_helm = (int(pts[0][0]), int(pts[0][1]))
+                raw_blue_foot = get_best_foot(pts)
+
+            red_helmet_pt = smooth_pt(raw_red_helm, "red_helm", max_jump=200, max_hold=10)
+            red_foot_pt = smooth_pt(raw_red_foot, "red_foot", max_jump=200, max_hold=10)
+            blue_helmet_pt = smooth_pt(raw_blue_helm, "blue_helm", max_jump=200, max_hold=10)
+            blue_foot_pt = smooth_pt(raw_blue_foot, "blue_foot", max_jump=200, max_hold=10)
 
         output = {}
         # Masks: 80px radius (160px total reach to catch overlapping hits)
