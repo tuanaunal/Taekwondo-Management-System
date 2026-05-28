@@ -578,25 +578,6 @@ class MainWindow(QMainWindow):
                 
                 pdf.output(file_path)
                 self.status_bar.showMessage(f"PDF Raporu kaydedildi: {file_path}")
-                QMessageBox.information(self, "Başarılı", f"Resmi PDF Raporu Başarıyla Oluşturuldu!\\n\\n{file_path}")
+                QMessageBox.information(self, "Başarılı", f"Resmi PDF Raporu Başarıyla Oluşturuldu!\n\n{file_path}")
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"PDF oluşturulurken hata meydana geldi:\\n{str(e)}")', '-').replace('–', '-')
-                
-                # PDF fontu emoji desteklemediği için Latin-1'e uymayan tüm emojileri ve sembolleri filtrele
-                clean_text = clean_text.encode('latin-1', 'ignore').decode('latin-1')
-                
-                for line in clean_text.split('\n'):
-                    if "---" in line or "===" in line:
-                        pdf.set_font("Arial", 'B', 12)
-                        pdf.set_text_color(31, 111, 235) # Mavi başlık
-                        pdf.cell(0, 10, txt=line, ln=1)
-                        pdf.set_font("Arial", size=11)
-                        pdf.set_text_color(40, 40, 40)
-                    else:
-                        pdf.multi_cell(0, 8, txt=line)
-                
-                pdf.output(file_path)
-                self.status_bar.showMessage(f"PDF Raporu kaydedildi: {file_path}")
-                QMessageBox.information(self, "Başarılı", f"PDF Raporu Başarıyla Oluşturuldu!\\n\\n{file_path}")
-            except Exception as e:
-                QMessageBox.critical(self, "Hata", f"PDF oluşturulurken hata meydana geldi:\\n{str(e)}")
+                QMessageBox.critical(self, "Hata", f"PDF oluşturulurken hata meydana geldi:\n{str(e)}")
