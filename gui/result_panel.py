@@ -318,7 +318,7 @@ class ResultPanel(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
     def clear(self):
-        \"\"\"Paneli temizler.\"\"\"
+        """Paneli temizler."""
         self.decision_label.setText("Analiz bekleniyor...")
         self.decision_label.setStyleSheet("color: #8899aa; padding: 15px; background-color: #16213e; border-radius: 8px;")
         self.confidence_label.setText("")
