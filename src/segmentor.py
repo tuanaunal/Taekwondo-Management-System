@@ -177,7 +177,8 @@ class EquipmentSegmentor:
     def draw_segmentation(self, frame: np.ndarray, seg_results: dict, alpha: float = 0.5) -> np.ndarray:
         """GUI icin segmentasyon maskelerini ve centroidleri cizer."""
         overlay = frame.copy()
-        
+        fh, fw = frame.shape[:2]
+
         colors = {
             "red_helmet": (0, 0, 255),
             "red_foot": (0, 0, 255),
@@ -188,13 +189,20 @@ class EquipmentSegmentor:
         for key, color in colors.items():
             if key in seg_results:
                 mask = seg_results[key].get("mask")
+                # Maske, on-islemde buyutulmus kareye gore uretilir (orn. 1920x1080).
+                # Cizilen kare farkli boyuttaysa koordinatlari o boyuta olcekle.
+                sx, sy = 1.0, 1.0
                 if mask is not None:
+                    mh, mw = mask.shape[:2]
+                    sx, sy = fw / mw, fh / mh
+                    if (mh, mw) != (fh, fw):
+                        mask = cv2.resize(mask, (fw, fh), interpolation=cv2.INTER_NEAREST)
                     colored_mask = np.zeros_like(frame)
                     colored_mask[mask > 0] = color
                     cv2.addWeighted(colored_mask, alpha, overlay, 1 - alpha, 0, overlay)
-                
+
                 centroids = seg_results[key].get("centroids", [])
                 for cx, cy in centroids:
-                    cv2.circle(overlay, (cx, cy), 5, (0, 255, 0), -1)
+                    cv2.circle(overlay, (int(cx * sx), int(cy * sy)), 5, (0, 255, 0), -1)
                     
         return overlay
