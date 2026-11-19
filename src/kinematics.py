@@ -39,16 +39,19 @@ class KinematicAnalyzer:
         if len(positions) < window_size:
             return positions
             
-        # 1. Despike (Fiziksel olarak imkansız sıçramaları filtrele)
-        # Bir insan kafası 1 karede (33ms) 50 pikselden fazla hareket edemez.
-        # Eğer ederse, bu YOLO'nun kafa yerine ayağı takip ettiğinin kanıtıdır.
+        # 1. Despike (Tek karelik hatalı sıçramaları filtrele)
+        # YOLO bazen tek bir karede kafa yerine başka bir noktayı (ör. ayak) verir:
+        # konum bir karede uzağa sıçrar ve bir sonraki karede geri döner.
+        # Sadece bu "gidip geri dönen" tekil sıçramalar komşuların ortalamasıyla
+        # değiştirilir. Kalıcı yer değiştirme (gerçek darbede kafanın savrulması)
+        # korunur; aksi halde takip donar ve darbe hareketsiz görünür.
         despiked = np.copy(positions)
         MAX_JUMP = 50.0
-        for i in range(1, len(despiked)):
-            dist = np.linalg.norm(despiked[i] - despiked[i-1])
-            if dist > MAX_JUMP:
-                # İmkansız sıçrama: Bir önceki geçerli konumu koru
-                despiked[i] = despiked[i-1]
+        for i in range(1, len(positions) - 1):
+            jump_out = np.linalg.norm(positions[i] - positions[i - 1])
+            jump_back = np.linalg.norm(positions[i + 1] - positions[i - 1])
+            if jump_out > MAX_JUMP and jump_back <= MAX_JUMP:
+                despiked[i] = (positions[i - 1] + positions[i + 1]) / 2.0
                 
         # 2. Hareketli Ortalama (Moving Average)
         smoothed = np.copy(despiked)
@@ -156,6 +159,7 @@ class KinematicAnalyzer:
             "velocity_profile": velocity,
             "acceleration_profile": acceleration,
             "max_acceleration": 0.0,
+            "net_displacement": 0.0,
             "peak_frame": 0,
             "type": "stationary",
             "confidence": 0.0,
