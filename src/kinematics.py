@@ -204,6 +204,7 @@ class KinematicAnalyzer:
         mean_acc = np.mean(abs_acc) if np.mean(abs_acc) > 0 else 1e-6
         cv = np.std(abs_acc) / mean_acc  # Coefficient of Variation
         is_sharp = cv > EVASION_SMOOTHNESS_THRESHOLD
+        result["acceleration_cv"] = float(cv)
 
         # ── Karar ──
         impact_score = 0.0

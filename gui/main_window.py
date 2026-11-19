@@ -501,12 +501,11 @@ class MainWindow(QMainWindow):
                 decision_label = decision.get('label_tr', 'Bilinmiyor')
                 confidence = decision.get('confidence', 0.0) * 100
                 
-                if "Ghost" in decision_label:
-                    pdf.set_fill_color(255, 235, 238) # Açık kırmızı
-                    pdf.set_text_color(198, 40, 40)   # Koyu kırmızı
-                else:
-                    pdf.set_fill_color(232, 245, 233) # Açık yeşil
-                    pdf.set_text_color(46, 125, 50)   # Koyu yeşil
+                # Karar rengi, arayüzdeki ile ayni olsun diye karar motorundan alinir
+                hex_color = decision.get('color', '#95A5A6').lstrip('#')
+                r, g, b = (int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+                pdf.set_fill_color(int(r + (255 - r) * 0.85), int(g + (255 - g) * 0.85), int(b + (255 - b) * 0.85))
+                pdf.set_text_color(int(r * 0.75), int(g * 0.75), int(b * 0.75))
                 
                 pdf.set_font("Arial", 'B', 14)
                 pdf.cell(0, 15, safe_text(f"  Nihai Karar: {decision_label} (Guven Orani: %{confidence:.1f})"), 0, 1, 'L', fill=True)
@@ -556,10 +555,10 @@ class MainWindow(QMainWindow):
                     pdf.cell(40, 8, safe_text(v))
                 
                 add_row(12, y_start + 12, "Toplam Kare:", f"{contact.get('total_frames', 0)}")
-                add_row(12, y_start + 20, "Temasli Kare:", f"{contact.get('frames_with_contact', 0)}")
-                add_row(12, y_start + 28, "Yakin Gecis:", f"{contact.get('frames_near_miss', 0)}")
-                add_row(12, y_start + 36, "Maks Cakisma:", f"{contact.get('max_overlap_px', 0)} px")
-                min_dist = contact.get('min_distance_px', float('inf'))
+                add_row(12, y_start + 20, "Temasli Kare:", f"{contact.get('contact_frames', 0)}")
+                add_row(12, y_start + 28, "Yakin Gecis:", f"{contact.get('near_miss_frames', 0)}")
+                add_row(12, y_start + 36, "Maks Cakisma:", f"{contact.get('max_overlap', 0)} px")
+                min_dist = contact.get('min_distance', float('inf'))
                 add_row(12, y_start + 44, "Min Mesafe:", f"{min_dist:.1f} px" if min_dist < 1e6 else "N/A")
                 
                 # Sağ Sütun (Kinematik Analiz)
@@ -571,10 +570,11 @@ class MainWindow(QMainWindow):
                 pdf.set_xy(112, y_start + 2)
                 pdf.cell(86, 8, "Kinematik Verileri", 0, 1)
                 
-                add_row(112, y_start + 12, "Hareket Tipi:", f"{kinematic.get('motion_class', 'N/A').upper()}")
-                add_row(112, y_start + 20, "Maks Ivme:", f"{kinematic.get('max_accel', 0):.1f} px/s^2")
-                add_row(112, y_start + 28, "Ivme Tepe Karesi:", f"{kinematic.get('accel_peak_frame', 'N/A')}")
-                add_row(112, y_start + 36, "Varyasyon (CV):", f"{kinematic.get('accel_cv', 0):.2f}")
+                add_row(112, y_start + 12, "Hareket Tipi:", f"{kinematic.get('type', 'N/A').upper()}")
+                add_row(112, y_start + 20, "Maks Ivme:", f"{kinematic.get('max_acceleration', 0):.1f} px/s^2")
+                add_row(112, y_start + 28, "Ivme Tepe Karesi:", f"{kinematic.get('peak_frame', 'N/A')}")
+                add_row(112, y_start + 36, "Varyasyon (CV):", f"{kinematic.get('acceleration_cv', 0):.2f}")
+                add_row(112, y_start + 44, "Net Savrulma:", f"{kinematic.get('net_displacement', 0):.1f} px")
                 
                 pdf.output(file_path)
                 self.status_bar.showMessage(f"PDF Raporu kaydedildi: {file_path}")
