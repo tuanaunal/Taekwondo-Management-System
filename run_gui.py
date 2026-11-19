@@ -13,6 +13,10 @@ import os
 # Proje kök dizinini Python yoluna ekle
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Windows'ta PyQt5, PyTorch'tan önce yüklenirse torch DLL'leri açılamıyor
+# (WinError 1114). Bu yüzden torch (ultralytics üzerinden) önce yüklenir.
+import torch  # noqa: F401
+
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QFont
 from gui.main_window import MainWindow
