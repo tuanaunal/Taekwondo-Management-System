@@ -36,7 +36,7 @@ from src.contact_analyzer import ContactAnalyzer
 from src.decision_engine import DecisionEngine
 
 
-def analyze_video(video_path: str, verbose: bool = True) -> dict:
+def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True) -> dict:
     """
     Tek bir video dosyasini uctan uca analiz eder.
 
@@ -46,6 +46,8 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
         Analiz edilecek video dosya yolu.
     verbose : bool
         Ayrintili cikti yazdir.
+    save_graph : bool
+        Ivme grafigini output/graphs klasorune kaydet (toplu testte kapatilir).
 
     Returns
     -------
@@ -225,7 +227,7 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
 
     # Ivme grafigi olustur
     graph_path = ""
-    if len(best_trajectory) >= 3:
+    if save_graph and len(best_trajectory) >= 3:
         graph_path = kinematic_analyzer.plot_kinematics(
             best_trajectory,
             title=f"{video_name} - Kask Kinematigi",

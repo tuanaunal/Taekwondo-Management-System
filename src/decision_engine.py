@@ -29,7 +29,7 @@ MEVCUT DURUM (geçici)
 Bu dosyadaki make_decision() henüz eski kategorileri üretir
 (REAL_HIT, LIGHT_CONTACT, EXTERNAL_FACTOR, GHOST_HIT, INCONCLUSIVE).
 Değerlendirmede GHOST_HIT ve EXTERNAL_FACTOR "temas yok",
-REAL_HIT ve LIGHT_CONTACT "temas var" olarak sayılır (bkz. evaluator.py).
+REAL_HIT ve LIGHT_CONTACT "temas var" olarak sayılır (bkz. degerlendir.py).
 """
 
 from src.config import WEIGHT_CONTACT, WEIGHT_KINEMATICS, CONFIDENCE_THRESHOLD

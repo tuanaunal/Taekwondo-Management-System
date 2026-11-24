@@ -16,4 +16,6 @@ python deneyler/inspect_video.py
 | `test_*.py` | Takip ve renk atama yöntemlerinin eski denemeleri |
 | `analyze_ke.py`, `optimize_ke.py`, `find_thresholds.py`, `train_tree.py` | Karar eşiklerini toplu sonuçlar üzerinden ayarlama denemeleri |
 
+> Not: `analyze_ke.py`, `optimize_ke.py` ve `train_tree.py`, artık kaldırılmış olan `run_batch.py`'nin ürettiği `batch_summary_detailed.csv` dosyasını okur; bu yüzden bugün doğrudan çalışmazlar. Güncel değerlendirme aracı proje kökündeki `degerlendir.py`'dir.
+
 > Not: Eşik ayarlama betikleri, eşikleri test edilen verinin kendisi üzerinde ayarlar (ezberleme riski). Doğru değerlendirme yöntemi yol haritasının 18. adımında kurulacaktır.
