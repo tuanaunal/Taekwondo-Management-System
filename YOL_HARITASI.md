@@ -42,7 +42,7 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | 13 | Hareket verisini doğru yumuşatmak (Savitzky–Golay) | ✅ | 24 |
 | 14 | **Başın gövdeye göre hareketi ve baş dönüşü** *(ana özellik)* | ✅ | 25 |
 | 15 | Kinematik analizi temas anına odaklamak *(sadece an güvenilirse: kullanıcı karesi / gerçek yaklaşım)* | ✅ | 26, 27, 28, 29 (kısmen) |
-| 16 | Takip modülünü sadeleştirmek | | 22, 23 |
+| 16 | Takip modülünü sadeleştirmek *(eski tracker.py kaldırıldı)* | ✅ | 22, 23 |
 | | **4. Aşama – Karar** | | |
 | 17 | Karar motorunu yeni tanıma göre yazmak (temas var / yok / belirsiz × sensör) | | 30, 32, 34 |
 | 18 | Elle yazılmış eşikler yerine yorumlanabilir küçük model + doğru değerlendirme | | 33, 35, 36 |

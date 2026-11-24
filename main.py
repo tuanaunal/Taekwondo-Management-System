@@ -30,7 +30,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.config import GRAPHS_DIR, LOGS_DIR
 from src.preprocessor import VideoPreprocessor, load_video, get_video_info
 from src.segmentor import EquipmentSegmentor
-from src.tracker import MultiObjectTracker
 from src.kinematics import KinematicAnalyzer
 from src.contact_analyzer import ContactAnalyzer
 from src.decision_engine import DecisionEngine
@@ -72,7 +71,6 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     # -- Modulleri baslat --
     preprocessor = VideoPreprocessor()
     segmentor = EquipmentSegmentor()
-    tracker = MultiObjectTracker(max_disappeared=5)
     contact_analyzer = ContactAnalyzer()
     decision_engine = DecisionEngine()
 
@@ -125,10 +123,9 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
             for key in ("red_helmet", "blue_helmet", "red_foot", "blue_foot")
         })
 
-        # 3. Takip
-        tracking = tracker.update(seg_results, frame_idx)
-
-        # 4. Temas analizi (her renk cifti icin)
+        # 3. Temas analizi (her renk cifti icin)
+        # Not: Sporcularin takibi segmentor icinde (ByteTrack + kalici kimlik) yapiliyor;
+        # eski agirlik merkezi takip modulu (tracker.py) Adim 16'da kaldirildi.
         # Kirmizi ayak -> Mavi kask (veya tam tersi)
         contact_pairs = [
             ("red_foot", "blue_helmet"),
