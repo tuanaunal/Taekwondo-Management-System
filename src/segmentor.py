@@ -48,6 +48,16 @@ HEAD_RADIUS_PER_TORSO_LENGTH = 0.17     # (15 / 2 + kask payi) / 50
 # Ayak ucu, diz -> ayak bilegi dogrultusu uzatilarak tahmin edilir.
 #   kaval kemigi (diz - ayak bilegi) ~42 cm  ->  15 / 42 ~ 0.35
 FOOT_TIP_PER_SHANK_LENGTH = 0.35
+
+# ÖLÇEK NORMALİZASYONU
+# Temas, savrulma ve ivme esikleri piksel cinsindendir ve veri setindeki 1080p kliplerde
+# ayarlanmistir; bu kliplerde sporcularin ortanca bas yaricapi ~26 px olculdu.
+# Her videoda tum koordinatlar, sporcularin bas yaricapi bu referans degere esit olacak sekilde
+# olceklenir. Boylece kamera yakin/uzak ya da video 720p/1080p olsa da esikler ayni fiziksel
+# mesafeye denk gelir ("piksel" artik "referans piksel" demektir: 26 px = bir bas yaricapi).
+REFERENCE_HEAD_RADIUS = 26.0
+REFERENCE_FRAME_HEIGHT = 1080      # Bas yaricapi hic olculemezse: eski davranis (1080p'ye olcekle)
+SCALE_LIMITS = (0.25, 4.0)         # Hatali olcumlere karsi olcek faktorunun izin verilen araligi
 # YOLOv8-Pose (COCO): 13 sol diz, 14 sag diz, 15 sol ayak bilegi, 16 sag ayak bilegi
 LEGS = [(13, 15), (14, 16)]
 
@@ -70,6 +80,7 @@ class EquipmentSegmentor:
         self.red_track = None   # Video geneline gore secilen kirmizi sporcunun takip numarasi
         self.blue_track = None  # Video geneline gore secilen mavi sporcunun takip numarasi
         self._last_box = {"red": None, "blue": None}  # Sporcunun son goruldugu kutu (2. gecis)
+        self.scale_factor = 1.0  # Koordinatlarin referans olcege cevrilme carpani (segment_video)
 
     # ────────────────────────────────────
     # RENK TESPITI (gogus koruyucusu / hogu)
@@ -473,7 +484,38 @@ class EquipmentSegmentor:
             h, w = frame.shape[:2]
             detections.append(self.detect_persons(frame))
         self.select_athletes()
-        return (self.build_features(persons, h, w) for persons in detections)
+
+        # Olcek: secilen sporcularin video boyunca ortanca bas yaricapi referans degere getirilir
+        self.scale_factor = self._estimate_scale(detections, h)
+        k = self.scale_factor
+        for persons in detections:
+            for p in persons:
+                p["pts"] = p["pts"] * k
+                p["box"] = p["box"] * k
+                p["area"] = p["area"] * k * k
+        sh, sw = max(1, int(round(h * k))), max(1, int(round(w * k)))
+        logger.info(f"Olcek faktoru: {k:.2f} (referans bas yaricapi {REFERENCE_HEAD_RADIUS:.0f} px)")
+        return (self.build_features(persons, sh, sw) for persons in detections)
+
+    def _estimate_scale(self, detections: list, frame_height: int) -> float:
+        """
+        Videonun olcek faktorunu dondurur: REFERENCE_HEAD_RADIUS / (sporcularin ortanca bas yaricapi).
+        Bas yaricapi hic olculemezse, eski davranisa denk gelecek sekilde 1080p'ye gore olceklenir.
+        """
+        radii = []
+        for persons in detections:
+            for p in persons:
+                if p["track_id"] in (self.red_track, self.blue_track) and p["track_id"] is not None:
+                    r = self._head_radius(p["pts"], p["conf"])
+                    if r:
+                        radii.append(r)
+        if radii:
+            k = REFERENCE_HEAD_RADIUS / float(np.median(radii))
+        elif frame_height > 0:
+            k = REFERENCE_FRAME_HEIGHT / float(frame_height)
+        else:
+            k = 1.0
+        return float(np.clip(k, *SCALE_LIMITS))
 
     def segment_frame(self, frame: np.ndarray) -> dict:
         """

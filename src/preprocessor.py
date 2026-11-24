@@ -1,9 +1,12 @@
 """
 preprocessor.py — Video Ön-İşleme Pipeline
 ============================================
-Her video karesine sırasıyla uygulanan ön-işleme adımları:
-  1. Çözünürlük standardizasyonu (1920x1080)
-  2. CLAHE ile ışık dengelemesi
+Her video karesine uygulanan ön-işleme adımı:
+  - CLAHE ile ışık dengelemesi
+
+Not: Eskiden her kare 1920x1080'e büyütülüyordu. Artık mesafeler sporcunun baş
+yarıçapına göre ölçekleniyor (segmentor.py, ÖLÇEK NORMALİZASYONU), bu yüzden
+büyütmeye gerek kalmadı; YOLO görüntüyü zaten kendi boyutuna küçültüyor.
 
 Not: Eskiden YOLO'dan önce Gaussian + Median bulanıklaştırma da yapılıyordu.
 Bulanıklaştırma hızlı tekmelerde ayak bileğinin kaybolmasına yol açtığı ve
@@ -15,7 +18,7 @@ import cv2
 import numpy as np
 from src.config import (
     CLAHE_CLIP_LIMIT, CLAHE_TILE_GRID_SIZE,
-    TARGET_FPS, TARGET_WIDTH, TARGET_HEIGHT,
+    TARGET_FPS,
 )
 
 
@@ -48,29 +51,9 @@ class VideoPreprocessor:
         np.ndarray
             İşlenmiş (ışık dengeli) BGR kare.
         """
-        # 1. Çözünürlük standardizasyonu
-        # Not: Temas ve savrulma eşikleri şimdilik piksel cinsinden ve 1080p'ye
-        # göre ayarlı olduğu için bu adım korunuyor. Mesafeler sporcu boyuna
-        # göre ölçeklendiğinde (yol haritası 10. adım) kaldırılacak.
-        frame = self._standardize_resolution(frame)
-
-        # 2. CLAHE ile ışık dengeleme
+        # CLAHE ile ışık dengeleme
         frame = self._apply_clahe(frame)
 
-        return frame
-
-    # ────────────────────────────────────
-    # ÇÖZÜNÜRLÜK STANDARDİZASYONU
-    # ────────────────────────────────────
-    def _standardize_resolution(self, frame: np.ndarray) -> np.ndarray:
-        """Kareyi hedef çözünürlüğe ölçekler."""
-        h, w = frame.shape[:2]
-        if w != TARGET_WIDTH or h != TARGET_HEIGHT:
-            frame = cv2.resize(
-                frame,
-                (TARGET_WIDTH, TARGET_HEIGHT),
-                interpolation=cv2.INTER_LINEAR,
-            )
         return frame
 
     # ────────────────────────────────────

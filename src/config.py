@@ -33,8 +33,8 @@ for d in [LOGS_DIR, GRAPHS_DIR, REPORTS_DIR]:
 # Videonun FPS bilgisi okunamazsa kullanılan varsayılan değer.
 # Kinematik hesaplar her zaman videonun GERÇEK FPS değeriyle yapılır.
 TARGET_FPS = 30
-TARGET_WIDTH = 1920
-TARGET_HEIGHT = 1080
+# Not: Çözünürlük standardizasyonu (eski TARGET_WIDTH/HEIGHT) kaldırıldı;
+# mesafeler sporcunun baş yarıçapına göre ölçekleniyor (bkz. segmentor.py).
 
 # ──────────────────────────────────────────────
 # 3. CLAHE ve ÖN-İŞLEME PARAMETRELERİ

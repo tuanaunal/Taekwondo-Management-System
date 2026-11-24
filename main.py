@@ -102,6 +102,11 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
 
     frame_features = segmentor.segment_video(processed_frames())
     cap.release()
+    # Tum mesafeler (temas, savrulma, ivme) bu carpanla "referans piksele" cevrildi:
+    # 26 referans piksel = bir bas yaricapi (bkz. segmentor.py, OLCEK NORMALIZASYONU)
+    info["scale_factor"] = segmentor.scale_factor
+    if verbose:
+        print(f"  Olcek faktoru: {segmentor.scale_factor:.2f}")
 
     for seg_results in frame_features:
         # 3. Takip
