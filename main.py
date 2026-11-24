@@ -34,7 +34,7 @@ from src.tracker import MultiObjectTracker
 from src.kinematics import KinematicAnalyzer
 from src.contact_analyzer import ContactAnalyzer
 from src.decision_engine import DecisionEngine
-from src.contact_moment import find_contact_moment
+from src.contact_moment import find_contact_moment, METHOD_USER, METHOD_APPROACH
 from src.head_response import compute_head_response
 
 
@@ -211,8 +211,19 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
             print(f"  Temas ani: kare {contact_moment['frame']} ({contact_moment['time_sec']:.2f} sn) - "
                   f"{contact_moment['method_tr']}, hedef: {contact_moment['target']}")
 
+    # Olcumler temas anina SADECE an guvenilirse odaklanir: kullanicinin isaretledigi kare ya da
+    # ayagin basa gercekten yaklastigi kare. Otomatik "basin en hizli hareket ettigi kare" yontemi
+    # kliplerin yaklasik yarisinda yanlis kareye dusuyor; o kareye odaklanmak gercek tepkiyi
+    # pencerenin disinda birakip ayirt ediciligi dusuruyordu (bas donusu AUC %69 -> %52).
+    reliable_moment = contact_moment["method"] in (METHOD_USER, METHOD_APPROACH)
+    analysis_anchor = contact_moment["frame"] if reliable_moment else None
+    analysis_target = contact_moment["target"] if reliable_moment else None
+    contact_moment["used_for_analysis"] = reliable_moment
+
     # -- Bas Tepkisi (govdeye gore savrulma, bas donusu) --
-    head_response = compute_head_response(moment_features, info["fps"])
+    head_response = compute_head_response(moment_features, info["fps"],
+                                          anchor_frame=analysis_anchor,
+                                          target=analysis_target)
     if verbose:
         hr = head_response["max"]
         print(f"  Bas tepkisi: govdeye gore savrulma {hr['relative_swing']:.1f} px, "
@@ -222,16 +233,17 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     contact_summary = contact_analyzer.analyze_video_contacts(frame_contacts)
 
     # -- Kinematik Analiz --
-    # Temasin veya en yakin gecisin gerceklestigi hedef kaski bul
-    target_helmet_key = None
+    # Hedef kask: temas aninda basi hedef alinan sporcu. Bilinmiyorsa (eski yontem)
+    # temasin veya en yakin gecisin gerceklestigi karedeki kask.
+    target_helmet_key = f"{contact_moment['target']}_helmet" if contact_moment["target"] else None
     
     # 1. Eger fiziksel temas varsa, en yuksek overlap olan karedeki kaski sec
     peak_overlap = 0
-    for r in frame_contacts:
+    for r in (frame_contacts if target_helmet_key is None else []):
         if r.get("contact_type") == "overlap" and r.get("overlap_pixels", 0) > peak_overlap:
             peak_overlap = r["overlap_pixels"]
             target_helmet_key = r.get("helmet_key")
-            
+
     # 2. Eger fiziksel temas yoksa, en yakin gecisin (min contour distance) oldugu karedeki kaski sec
     if target_helmet_key is None:
         min_dist = float("inf")
@@ -240,31 +252,32 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
             if dist < min_dist:
                 min_dist = dist
                 target_helmet_key = r.get("helmet_key")
-                
+
     # Geriye donuk varsayilan secim
     if target_helmet_key is None:
         target_helmet_key = "red_helmet"
 
-    all_traj = tracker.get_all_trajectories()
-    best_trajectory = []
-    best_traj_key = target_helmet_key
+    def helmet_trajectory(helmet_key):
+        """Kaskin (burun) gercekten olculdugu karelerden yorunge: [(x, y, kare), ...]"""
+        traj = []
+        for i, mf in enumerate(moment_features):
+            h = mf.get(helmet_key, {})
+            if h.get("centroids") and not h.get("held"):
+                x, y = h["centroids"][0]
+                traj.append((x, y, i))
+        return traj
 
-    # Secilen kaska ait en uzun yorungeyi al
-    trajs = all_traj.get(target_helmet_key, {})
-    for obj_id, traj in trajs.items():
-        if len(traj) > len(best_trajectory):
-            best_trajectory = traj
-            
-    # Eger secilen kask icin yorunge cok kisaysa veya bulunamazsa diger kaska bak (fallback)
+    # Sporcunun kimligi kopsa bile yorunge bolunmez (eskiden en uzun parca aliniyordu)
+    best_traj_key = target_helmet_key
+    best_trajectory = helmet_trajectory(target_helmet_key)
     if len(best_trajectory) < 3:
         other_key = "blue_helmet" if target_helmet_key == "red_helmet" else "red_helmet"
-        trajs = all_traj.get(other_key, {})
-        for obj_id, traj in trajs.items():
-            if len(traj) > len(best_trajectory):
-                best_trajectory = traj
-                best_traj_key = other_key
+        other = helmet_trajectory(other_key)
+        if len(other) > len(best_trajectory):
+            best_trajectory, best_traj_key = other, other_key
 
-    kinematic_result = kinematic_analyzer.classify_motion(best_trajectory)
+    kinematic_result = kinematic_analyzer.classify_motion(best_trajectory,
+                                                          anchor_frame=analysis_anchor)
 
     # Ivme grafigi olustur
     graph_path = ""

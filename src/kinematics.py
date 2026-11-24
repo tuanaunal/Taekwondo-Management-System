@@ -29,6 +29,12 @@ REFERENCE_FPS = 30.0  # Kare tabanlı eşiklerin ayarlandığı FPS
 SAVGOL_WINDOW_SEC = 0.2   # Pencere süresi (30 FPS'te 7 kare)
 SAVGOL_POLYORDER = 2
 
+# Temas anına odaklanma: ivme ve savrulma, temas anının etrafındaki pencereden ölçülür.
+# Böylece klipteki başka hareketler (adım atma, başka bir tekme) sonucu bozmaz.
+ANCHOR_WINDOW_SEC = 0.5      # Temas anının ± bu kadar saniyesi içindeki ivme incelenir
+ANCHOR_TOLERANCE_SEC = 0.17  # Temas anı tahmini ± bu kadar kayabilir (30 FPS'te 5 kare)
+SWING_HALF_SEC = 0.33        # Savrulma: ±0.33 sn pencerenin başı ile sonu arasındaki fark
+
 
 class KinematicAnalyzer:
     """
@@ -151,9 +157,12 @@ class KinematicAnalyzer:
     # ────────────────────────────────────
     # İVME PROFİLİ SINIFLANDIRMA
     # ────────────────────────────────────
-    def classify_motion(self, trajectory: list) -> dict:
+    def classify_motion(self, trajectory: list, anchor_frame: int = None) -> dict:
         """
         İvme profilini analiz ederek hareket tipini sınıflandırır.
+
+        anchor_frame verilirse (temas anı), ivme ve savrulma bu anın etrafındaki
+        pencereden ölçülür; verilmezse klibin tamamı kullanılır.
 
         Darbe İvmesi Özellikleri:
           - Ani, keskin ivme artışı (yüksek tepe değeri)
@@ -174,7 +183,8 @@ class KinematicAnalyzer:
                 'acceleration_profile': np.ndarray,
                 'velocity_profile': np.ndarray,
                 'displacement_profile': np.ndarray,
-                'peak_frame': int,
+                'peak_frame': int,           # ivme tepesinin KARE NUMARASI (videodaki)
+                'anchor_frame': int | None,  # kullanılan temas anı
                 'confidence': float,
                 'details': str,
             }
@@ -182,6 +192,8 @@ class KinematicAnalyzer:
         displacement = self.compute_displacement(trajectory)
         velocity = self.compute_velocity(trajectory)
         acceleration = self.compute_acceleration(trajectory)
+        series = self.kinematic_series(trajectory)
+        grid = series["frames"]
 
         result = {
             "displacement_profile": displacement,
@@ -190,6 +202,7 @@ class KinematicAnalyzer:
             "max_acceleration": 0.0,
             "net_displacement": 0.0,
             "peak_frame": 0,
+            "anchor_frame": None,
             "type": "stationary",
             "confidence": 0.0,
             "details": "",
@@ -201,35 +214,56 @@ class KinematicAnalyzer:
             result["details"] = "Nesne neredeyse hareketsiz."
             return result
 
-        abs_acc = np.abs(acceleration)
-        max_acc = np.max(abs_acc)
-        peak_idx = np.argmax(abs_acc)
+        # ── İnceleme penceresi: temas anının etrafı (yoksa klibin tamamı) ──
+        abs_acc_all = np.abs(acceleration)
+        if (anchor_frame is not None and len(grid) == len(abs_acc_all)
+                and grid[0] <= anchor_frame <= grid[-1]):
+            w = max(1, int(round(ANCHOR_WINDOW_SEC * self.fps)))
+            in_win = (grid >= anchor_frame - w) & (grid <= anchor_frame + w)
+            result["anchor_frame"] = int(anchor_frame)
+        else:
+            in_win = np.ones(len(abs_acc_all), dtype=bool)
+            anchor_frame = None
+        win_idx = np.where(in_win)[0]
+        abs_acc = abs_acc_all[win_idx]
+
+        max_acc = float(np.max(abs_acc))
+        peak_idx = int(win_idx[np.argmax(abs_acc)])  # tüm seri içindeki indeks
         result["max_acceleration"] = max_acc
-        result["peak_frame"] = peak_idx
+        # Kare numarası olarak (eskiden dizi indeksiydi ve yörünge dizisinde kaymaya yol açıyordu)
+        result["peak_frame"] = int(grid[peak_idx]) if len(grid) == len(abs_acc_all) else peak_idx
         
-        # ── Net Displacement (Ghost Hit vs Real Hit ayrımı için) ──
-        # İvme zirvesinden 10 kare öncesi ve 10 kare sonrası arasındaki net yer değiştirme.
-        # Gerçek darbede kafa geriye savrulur (net_disp > 165px). 
-        # Ghost hitte kafa yerine döner veya az hareket eder (net_disp < 165px).
+        # ── Net savrulma: ±0.33 sn pencerenin başı ile sonu arasındaki yer değiştirme ──
+        # Temas anı varsa pencere merkezi temas anının ±0.17 sn çevresinde aranır (tahmin payı);
+        # yoksa ivme tepesi kullanılır. Konum: eşit aralıklı ızgaradaki yumuşatılmamış konum.
+        raw_pos = series["raw"]
+        half = max(1, int(round(SWING_HALF_SEC * self.fps)))
+        if anchor_frame is not None:
+            tol = max(0, int(round(ANCHOR_TOLERANCE_SEC * self.fps)))
+            a = int(anchor_frame - grid[0])
+            centers = range(a - tol, a + tol + 1)
+        else:
+            centers = [peak_idx]
         net_disp = 0.0
-        # Pencere: zirvenin ~0.33 sn öncesi ve sonrası (30 FPS'te 10 kare).
-        # İvme serisi eşit aralıklı kare ızgarasında olduğu için konum da aynı ızgaradan alınır
-        # (yumuşatılmamış, sıçrama düzeltilmiş konum; savrulma bilgisi korunur).
-        raw_pos = self.kinematic_series(trajectory)["raw"]
-        half_window = max(1, int(round(10 * self.frame_scale)))
-        if len(raw_pos) > 2 * half_window:
-            start_idx = max(0, peak_idx - half_window)
-            end_idx = min(len(raw_pos) - 1, peak_idx + half_window)
-            net_disp = float(np.linalg.norm(raw_pos[end_idx] - raw_pos[start_idx]))
+        for c in centers:
+            if c - half >= 0 and c + half < len(raw_pos):
+                net_disp = max(net_disp, float(np.linalg.norm(raw_pos[c + half] - raw_pos[c - half])))
+            elif len(raw_pos) > 1 and anchor_frame is None:
+                s0, s1 = max(0, c - half), min(len(raw_pos) - 1, c + half)
+                net_disp = max(net_disp, float(np.linalg.norm(raw_pos[s1] - raw_pos[s0])))
         
         result["net_displacement"] = net_disp
 
         # ── Kriter 1: Tepe ivme eşiği ──
         exceeds_threshold = max_acc > ACCELERATION_IMPACT_THRESHOLD
 
-        # ── Kriter 2: İvme süresi (kaç frame boyunca yüksek?) ──
+        # ── Kriter 2: İvme süresi (kaç ARDIŞIK kare boyunca yüksek?) ──
+        # Eskiden eşiği geçen tüm kareler (ardışık olmasa da) sayılıyordu; artık en uzun kesintisiz süre.
         high_acc_mask = abs_acc > (ACCELERATION_IMPACT_THRESHOLD * 0.5)
-        high_acc_duration = np.sum(high_acc_mask)
+        high_acc_duration, run = 0, 0
+        for flag in high_acc_mask:
+            run = run + 1 if flag else 0
+            high_acc_duration = max(high_acc_duration, run)
         max_impact_frames = IMPACT_DURATION_MAX_FRAMES * self.frame_scale
         is_short_duration = 0 < high_acc_duration <= max_impact_frames
 

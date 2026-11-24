@@ -41,7 +41,7 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | 12 | Temas ölçümünü kafa yarıçapı ve ayak ucuyla yeniden yazmak *(küçültüldü: temas artık destekleyici kanıt)* | ✅ | 19, 21, 43 (kısmen) |
 | 13 | Hareket verisini doğru yumuşatmak (Savitzky–Golay) | ✅ | 24 |
 | 14 | **Başın gövdeye göre hareketi ve baş dönüşü** *(ana özellik)* | ✅ | 25 |
-| 15 | Kinematik analizi temas anına odaklamak | | 26, 27, 28, 29 |
+| 15 | Kinematik analizi temas anına odaklamak *(sadece an güvenilirse: kullanıcı karesi / gerçek yaklaşım)* | ✅ | 26, 27, 28, 29 (kısmen) |
 | 16 | Takip modülünü sadeleştirmek | | 22, 23 |
 | | **4. Aşama – Karar** | | |
 | 17 | Karar motorunu yeni tanıma göre yazmak (temas var / yok / belirsiz × sensör) | | 30, 32, 34 |
@@ -66,3 +66,4 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | Hareket analizinde burun yerine kafa merkezi (Adım 8) | 12 → 10 | Baş dönüşü bilgisini siliyordu (Bulgu 1) |
 | YOLOv8m (büyük) poz modeli | 13 → 10, 4 kat yavaş | Tekme atan bacağı yine yakalamadı |
 | YOLOv8n-seg siluet ile temas | Ayrıştırmadı | Bulgu 3 |
+| Ölçümleri otomatik bulunan temas anına odaklamak (Adım 15) | Baş dönüşü AUC %69 → %52 | Otomatik an kliplerin yarısında yanlış kareye düşüyor; odaklanma artık sadece güvenilir anda yapılıyor |

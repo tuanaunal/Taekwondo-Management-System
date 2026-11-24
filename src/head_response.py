@@ -15,9 +15,10 @@ fiziksel tepkisine dayanır:
    hareket ediyor). Burnun baş merkezine göre konumu (baş yarıçapı cinsinden)
    başın yönünü gösterir; bu vektörün değişimi dönüş miktarıdır.
 
-Her ölçüm, bir kare penceresinin (±0.33 sn) başı ile sonu arasındaki değişimin
-klip içindeki en büyük değeridir. Tüm mesafeler referans pikseldir
-(26 px = bir baş yarıçapı, bkz. segmentor.py).
+Her ölçüm, bir kare penceresinin (±0.33 sn) başı ile sonu arasındaki değişimdir.
+Temas anı verilirse pencere merkezi temas anının ±0.17 sn çevresinde aranır;
+verilmezse klibin tamamındaki en büyük değer alınır. Tüm mesafeler referans
+pikseldir (26 px = bir baş yarıçapı, bkz. segmentor.py).
 """
 
 import numpy as np
@@ -26,6 +27,7 @@ from scipy.signal import savgol_filter
 WINDOW_HALF_SEC = 0.33     # Değişimin ölçüldüğü pencerenin yarı süresi (30 FPS'te 10 kare)
 SMOOTH_WINDOW_SEC = 0.2    # Savitzky–Golay yumuşatma penceresi (kinematics.py ile aynı)
 MAX_GAP_SEC = 0.17         # Bu süreden kısa eksiklikler ara değerle doldurulur (30 FPS'te 5 kare)
+ANCHOR_TOLERANCE_SEC = 0.17  # Temas anı tahmini ± bu kadar kayabilir (30 FPS'te 5 kare)
 
 
 def _fill_and_smooth(series: np.ndarray, fps: float) -> np.ndarray:
@@ -60,10 +62,15 @@ def _fill_and_smooth(series: np.ndarray, fps: float) -> np.ndarray:
     return out
 
 
-def _max_window_change(series: np.ndarray, half: int):
-    """Pencere başı (t-half) ile sonu (t+half) arasındaki değişimin en büyüğü ve merkez karesi."""
+def _max_window_change(series: np.ndarray, half: int, centers=None):
+    """
+    Pencere başı (t-half) ile sonu (t+half) arasındaki değişimin en büyüğü ve merkez karesi.
+    centers verilirse sadece bu merkez kareler denenir (temas anına odaklanma).
+    """
     best, best_t = 0.0, None
-    for t in range(half, len(series) - half):
+    candidates = range(half, len(series) - half) if centers is None else \
+        [t for t in centers if half <= t < len(series) - half]
+    for t in candidates:
         a, b = series[t - half], series[t + half]
         if np.isnan(a[0]) or np.isnan(b[0]):
             continue
@@ -96,9 +103,13 @@ def athlete_series(frame_features: list, color: str) -> dict:
     return {"nose": nose, "head": head, "torso": torso, "radius": radius}
 
 
-def compute_head_response(frame_features: list, fps: float) -> dict:
+def compute_head_response(frame_features: list, fps: float,
+                          anchor_frame: int = None, target: str = None) -> dict:
     """
     Her iki sporcu için baş tepkisi ölçümlerini hesaplar.
+
+    anchor_frame: temas anı (verilirse ölçümler bu anın çevresinden alınır)
+    target: başı hedef alınan sporcu ('red' / 'blue'); verilirse 'max' onun değerleridir
 
     Returns
     -------
@@ -110,10 +121,15 @@ def compute_head_response(frame_features: list, fps: float) -> dict:
               'rotation':         baş dönüşü (burnun baş merkezine göre kayması, baş yarıçapı cinsinden)
               '*_frame':          ilgili ölçümün en büyük olduğu kare
           },
-          'max': iki sporcunun en büyük değerleri (darbe alan sporcu en büyük tepkiyi verir)
+          'max': hedef sporcunun değerleri; hedef bilinmiyorsa iki sporcunun en büyükleri,
+          'anchor_frame', 'target': kullanılan temas anı ve hedef
         }
     """
     half = max(1, int(round(WINDOW_HALF_SEC * fps)))
+    centers = None
+    if anchor_frame is not None:
+        tol = max(0, int(round(ANCHOR_TOLERANCE_SEC * fps)))
+        centers = range(int(anchor_frame) - tol, int(anchor_frame) + tol + 1)
     result = {}
     for color in ("red", "blue"):
         s = athlete_series(frame_features, color)
@@ -125,16 +141,19 @@ def compute_head_response(frame_features: list, fps: float) -> dict:
         relative = head - torso                 # gövdeye göre baş konumu
         orientation = (nose - head) / r if np.isfinite(r) and r > 0 else np.full_like(nose, np.nan)
 
-        abs_v, abs_t = _max_window_change(nose, half)
-        rel_v, rel_t = _max_window_change(relative, half)
-        rot_v, rot_t = _max_window_change(orientation, half)
+        abs_v, abs_t = _max_window_change(nose, half, centers)
+        rel_v, rel_t = _max_window_change(relative, half, centers)
+        rot_v, rot_t = _max_window_change(orientation, half, centers)
         result[color] = {
             "absolute_swing": abs_v, "absolute_frame": abs_t,
             "relative_swing": rel_v, "relative_frame": rel_t,
             "rotation": rot_v, "rotation_frame": rot_t,
         }
-    result["max"] = {
-        key: max(result["red"][key], result["blue"][key])
-        for key in ("absolute_swing", "relative_swing", "rotation")
-    }
+    keys = ("absolute_swing", "relative_swing", "rotation")
+    if target in ("red", "blue"):
+        result["max"] = {key: result[target][key] for key in keys}
+    else:
+        result["max"] = {key: max(result["red"][key], result["blue"][key]) for key in keys}
+    result["anchor_frame"] = anchor_frame
+    result["target"] = target
     return result
