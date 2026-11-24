@@ -5,141 +5,218 @@ from ultralytics import YOLO
 
 YOLO_MODEL_PATH = 'yolov8n-pose.pt'
 
+# Sporcu adayi olmak icin kutu alaninin, karedeki en buyuk kisinin kutu alanina orani.
+# Kameradan uzaktaki seyirci/antrenor gibi kucuk gorunen kisileri eler.
+MIN_ATHLETE_AREA_RATIO = 0.35
+
 logger = logging.getLogger(__name__)
 
 class EquipmentSegmentor:
     """
-    YOLOv8-Pose kullanarak Kask ve Ayak konumlarını tespit eder.
-    Hatalı (0,0) konumlarını önlemek için akıllı fallback (Bilek -> Diz -> Kalça) mekanizması kullanır.
+    YOLOv8-Pose ile sporculari tespit edip kask (bas) ve ayak konumlarini uretir.
+    ByteTrack ile her kisiye kalici takip numarasi verilir; kirmizi/mavi sporcu
+    video geneli renk oylamasina gore secilir.
     """
     def __init__(self):
         logger.info(f"YOLOv8 Pose modeli yukleniyor: {YOLO_MODEL_PATH}")
         self.model = YOLO(YOLO_MODEL_PATH)
-        self.last_red_x = None
+        # Kalici kimlik: ByteTrack her kisiye video boyunca ayni takip numarasini verir.
+        # Her takip numarasi icin renk oylari ve gorunurluk istatistigi tutulur.
+        self.color_votes = {}   # track_id -> {"red": int, "blue": int}
+        self.track_stats = {}   # track_id -> {"frames": int, "prominence": float}
+        self.red_track = None   # Video geneline gore secilen kirmizi sporcunun takip numarasi
+        self.blue_track = None  # Video geneline gore secilen mavi sporcunun takip numarasi
 
-    def segment_frame(self, frame: np.ndarray) -> dict:
+    # ────────────────────────────────────
+    # RENK TESPITI (gogus koruyucusu / hogu)
+    # ────────────────────────────────────
+    @staticmethod
+    def _torso_color(frame: np.ndarray, pts: np.ndarray) -> str:
+        """Omuz-kalca arasindaki govde bolgesinin baskin rengini doner: red / blue / unknown."""
         h, w = frame.shape[:2]
-        
-        # 1. YOLO ile tahmin
-        results = self.model(frame, verbose=False)
-        
-        red_helmet_pt = None
-        red_foot_pt = None
-        blue_helmet_pt = None
-        blue_foot_pt = None
-        
-        if len(results) > 0 and results[0].keypoints is not None:
-            keypoints = results[0].keypoints.xy.cpu().numpy() # [N, 17, 2]
-            boxes = results[0].boxes.xyxy.cpu().numpy() # [N, 4]
-            
-            persons = []
-            for i, pts in enumerate(keypoints):
-                if len(pts) < 17: continue
-                box = boxes[i]
-                center_x = (box[0] + box[2]) / 2
-                
-                # Sirt/Gövde bölgesindeki renk ağırlığını kontrol edelim
-                # YOLOv8 omuzlar: 5 (Sol), 6 (Sağ) | Kalça: 11 (Sol), 12 (Sağ)
-                color_label = "unknown"
-                if pts[5][0] > 0 and pts[11][0] > 0:
-                    torso_x1 = int(min(pts[5][0], pts[6][0])) if pts[6][0] > 0 else int(pts[5][0] - 20)
-                    torso_x2 = int(max(pts[5][0], pts[6][0])) if pts[6][0] > 0 else int(pts[5][0] + 20)
-                    torso_y1 = int(min(pts[5][1], pts[6][1]))
-                    torso_y2 = int(max(pts[11][1], pts[12][1]))
-                    
-                    if torso_x1 < torso_x2 and torso_y1 < torso_y2:
-                        torso_x1, torso_y1 = max(0, torso_x1), max(0, torso_y1)
-                        torso_x2, torso_y2 = min(w, torso_x2), min(h, torso_y2)
-                        torso_crop = frame[torso_y1:torso_y2, torso_x1:torso_x2]
-                        if torso_crop.size > 0:
-                            hsv = cv2.cvtColor(torso_crop, cv2.COLOR_BGR2HSV)
-                            # Kırmızı
-                            mask_red1 = cv2.inRange(hsv, np.array([0, 100, 100]), np.array([10, 255, 255]))
-                            mask_red2 = cv2.inRange(hsv, np.array([160, 100, 100]), np.array([180, 255, 255]))
-                            red_pixels = cv2.countNonZero(cv2.bitwise_or(mask_red1, mask_red2))
-                            # Mavi
-                            mask_blue = cv2.inRange(hsv, np.array([100, 150, 50]), np.array([140, 255, 255]))
-                            blue_pixels = cv2.countNonZero(mask_blue)
-                            
-                            if red_pixels > blue_pixels and red_pixels > 20:
-                                color_label = "red"
-                            elif blue_pixels > red_pixels and blue_pixels > 20:
-                                color_label = "blue"
-                
-                box_area = (box[2] - box[0]) * (box[3] - box[1])
-                persons.append({"pts": pts, "color": color_label, "center_x": center_x, "box_area": box_area})
-                
-            # Sadece en büyük 2 bounding box'a sahip kişiyi (yani 2 sporcuyu) tut, hakem ve seyircileri ele!
-            persons.sort(key=lambda p: p["box_area"], reverse=True)
-            persons = persons[:2]
-            
-            # Eğer renk bulamadıysa VEYA her ikisine de aynı rengi verdiyse, pozisyon geçmişine göre ayır
-            if len(persons) == 2:
-                colors = [p["color"] for p in persons]
-                if colors.count("unknown") > 0 or colors[0] == colors[1]:
-                    persons.sort(key=lambda p: p["center_x"])
-                    if self.last_red_x is not None:
-                        dist0 = abs(persons[0]["center_x"] - self.last_red_x)
-                        dist1 = abs(persons[1]["center_x"] - self.last_red_x)
-                        if dist0 < dist1:
-                            persons[0]["color"] = "red"
-                            persons[1]["color"] = "blue"
-                        else:
-                            persons[0]["color"] = "blue"
-                            persons[1]["color"] = "red"
-                    else:
-                        persons[0]["color"] = "red"
-                        persons[1]["color"] = "blue"
-                            
-            red_person = next((p for p in persons if p["color"] == "red"), None)
-            blue_person = next((p for p in persons if p["color"] == "blue"), None)
+        # YOLOv8 omuzlar: 5 (Sol), 6 (Sag) | Kalca: 11 (Sol), 12 (Sag)
+        if not (pts[5][0] > 0 and pts[11][0] > 0):
+            return "unknown"
+        torso_x1 = int(min(pts[5][0], pts[6][0])) if pts[6][0] > 0 else int(pts[5][0] - 20)
+        torso_x2 = int(max(pts[5][0], pts[6][0])) if pts[6][0] > 0 else int(pts[5][0] + 20)
+        torso_y1 = int(min(pts[5][1], pts[6][1]))
+        torso_y2 = int(max(pts[11][1], pts[12][1]))
+        torso_x1, torso_y1 = max(0, torso_x1), max(0, torso_y1)
+        torso_x2, torso_y2 = min(w, torso_x2), min(h, torso_y2)
+        if torso_x1 >= torso_x2 or torso_y1 >= torso_y2:
+            return "unknown"
 
-            def get_all_feet(pts):
-                ankle_left, ankle_right = pts[15], pts[16]
-                ankles = [p for p in [ankle_left, ankle_right] if p[0] > 0 and p[1] > 0]
-                return [(int(p[0]), int(p[1])) for p in ankles]
+        hsv = cv2.cvtColor(frame[torso_y1:torso_y2, torso_x1:torso_x2], cv2.COLOR_BGR2HSV)
+        mask_red1 = cv2.inRange(hsv, np.array([0, 100, 100]), np.array([10, 255, 255]))
+        mask_red2 = cv2.inRange(hsv, np.array([160, 100, 100]), np.array([180, 255, 255]))
+        red_pixels = cv2.countNonZero(cv2.bitwise_or(mask_red1, mask_red2))
+        blue_pixels = cv2.countNonZero(cv2.inRange(hsv, np.array([100, 150, 50]), np.array([140, 255, 255])))
 
-            def smooth_pt(new_pt, attr_name, max_jump=150, max_hold=10):
-                hist_pt = getattr(self, f"{attr_name}_hist", None)
-                lost_frames = getattr(self, f"{attr_name}_lost", 0)
-                
-                if new_pt is not None and hist_pt is not None:
-                    dist = np.hypot(new_pt[0] - hist_pt[0], new_pt[1] - hist_pt[1])
-                    if dist > max_jump:
-                        new_pt = None # Ani atlama reddedildi
-                
-                if new_pt is not None:
-                    setattr(self, f"{attr_name}_hist", new_pt)
-                    setattr(self, f"{attr_name}_lost", 0)
-                    return new_pt
-                else:
-                    if hist_pt is not None and lost_frames < max_hold:
-                        setattr(self, f"{attr_name}_lost", lost_frames + 1)
-                        return hist_pt
-                    return None
+        if red_pixels > blue_pixels and red_pixels > 20:
+            return "red"
+        if blue_pixels > red_pixels and blue_pixels > 20:
+            return "blue"
+        return "unknown"
 
-            raw_red_helm = None
-            raw_red_feet = []
-            raw_blue_helm = None
-            raw_blue_feet = []
+    # ────────────────────────────────────
+    # 1. GECIS: KISILERI TESPIT ET VE ISTATISTIK TOPLA
+    # ────────────────────────────────────
+    def detect_persons(self, frame: np.ndarray) -> list:
+        """
+        Karedeki kisileri YOLO + ByteTrack ile tespit eder.
+        Her kisi icin takip numarasi, iskelet noktalari, kutu alani ve govde rengi doner;
+        ayrica video geneli renk oylarini ve gorunurluk istatistigini gunceller.
+        """
+        results = self.model.track(frame, persist=True, tracker="bytetrack.yaml", verbose=False)
+        if len(results) == 0 or results[0].keypoints is None:
+            return []
 
-            if red_person:
-                self.last_red_x = red_person["center_x"]
-                pts = red_person["pts"]
-                if pts[0][0] > 0 and pts[0][1] > 0:
-                    raw_red_helm = (int(pts[0][0]), int(pts[0][1]))
-                raw_red_feet = get_all_feet(pts)
-                
-            if blue_person:
-                pts = blue_person["pts"]
-                if pts[0][0] > 0 and pts[0][1] > 0:
-                    raw_blue_helm = (int(pts[0][0]), int(pts[0][1]))
-                raw_blue_feet = get_all_feet(pts)
+        keypoints = results[0].keypoints.xy.cpu().numpy()  # [N, 17, 2]
+        boxes = results[0].boxes.xyxy.cpu().numpy()         # [N, 4]
+        ids = results[0].boxes.id
+        track_ids = ids.int().cpu().tolist() if ids is not None else [None] * len(keypoints)
 
-            # Sadece Kasklar icin ziplama filtresi kullan (Kafalar 200 piksellik isinlanma yapamaz)
-            # Ayaklar ise saniyede cok hizli hareket ettigi (ucan tekme) icin filtrelemeden direkt gonderiyoruz!
-            red_helmet_pt = smooth_pt(raw_red_helm, "red_helm", max_jump=200, max_hold=10)
-            blue_helmet_pt = smooth_pt(raw_blue_helm, "blue_helm", max_jump=200, max_hold=10)
+        persons = []
+        for pts, box, track_id in zip(keypoints, boxes, track_ids):
+            if len(pts) < 17:
+                continue
+            persons.append({
+                "pts": pts,
+                "track_id": track_id,
+                "area": float((box[2] - box[0]) * (box[3] - box[1])),
+                "color": self._torso_color(frame, pts),
+            })
+
+        max_area = max((p["area"] for p in persons), default=0.0)
+        for p in persons:
+            if p["track_id"] is None:
+                continue
+            stats = self.track_stats.setdefault(p["track_id"], {"frames": 0, "prominence": 0.0})
+            stats["frames"] += 1
+            # Gorunurluk: kisinin bu karedeki boyutu, karedeki en buyuk kisiye gore (0-1)
+            stats["prominence"] += p["area"] / max_area if max_area > 0 else 0.0
+            if p["color"] != "unknown":
+                votes = self.color_votes.setdefault(p["track_id"], {"red": 0, "blue": 0})
+                votes[p["color"]] += 1
+        return persons
+
+    # ────────────────────────────────────
+    # SPORCU SECIMI (video geneline gore, bir kez)
+    # ────────────────────────────────────
+    def _athlete_score(self, track_id, color: str) -> float:
+        """
+        Bir takip numarasinin verilen renkteki sporcu olma puani:
+            gorunurluk x renk saflik orani
+        Gorunurluk: video boyunca ne kadar buyuk ve ne kadar sik gorundugu.
+        Saflik: (bu renk oyu - diger renk oyu) / gorundugu kare sayisi.
+        Arka plandaki kucuk kisiler gorunurlukten, hakem (renksiz) saflik oranindan dusuk puan alir.
+        """
+        stats = self.track_stats.get(track_id)
+        votes = self.color_votes.get(track_id)
+        if not stats or not votes:
+            return 0.0
+        other = "blue" if color == "red" else "red"
+        purity = max(0.0, (votes[color] - votes[other]) / stats["frames"])
+        return stats["prominence"] * purity
+
+    def select_athletes(self):
+        """
+        Video geneli istatistiklere gore kirmizi ve mavi sporcuyu secer.
+        Eski yontemin aksine "en buyuk iki kutu" ve "soldaki kirmizidir" varsayimlari yoktur.
+        """
+        tracks = list(self.track_stats.keys())
+        options = []
+        for first in ("red", "blue"):
+            second = "blue" if first == "red" else "red"
+            a = max(tracks, key=lambda t: self._athlete_score(t, first), default=None)
+            if a is not None and self._athlete_score(a, first) <= 0:
+                a = None
+            rest = [t for t in tracks if t != a]
+            b = max(rest, key=lambda t: self._athlete_score(t, second), default=None)
+            if b is not None and self._athlete_score(b, second) <= 0:
+                b = None
+            pair = {first: a, second: b}
+            total = sum(self._athlete_score(pair[c], c) for c in pair if pair[c] is not None)
+            options.append((total, pair))
+        pair = max(options, key=lambda o: o[0])[1]
+        self.red_track, self.blue_track = pair["red"], pair["blue"]
+        logger.info(f"Secilen sporcular: kirmizi id={self.red_track}, mavi id={self.blue_track}")
+
+    def _pick_person(self, persons: list, color: str, exclude=None):
+        """
+        Secilen sporcuyu bu karede bulur. Sporcunun takip numarasi bu karede yoksa
+        (ByteTrack kimligi kisa sureligine kopardiginda), video geneli puani bu renge
+        uygun olan baska bir buyuk kisi yedek olarak kullanilir.
+        """
+        target = self.red_track if color == "red" else self.blue_track
+        if target is not None:
+            for p in persons:
+                if p["track_id"] == target:
+                    return p
+        max_area = max((p["area"] for p in persons), default=0.0)
+        candidates = [
+            p for p in persons
+            if p is not exclude
+            and p["track_id"] not in (self.red_track, self.blue_track)
+            and p["area"] >= MIN_ATHLETE_AREA_RATIO * max_area
+            and (self._athlete_score(p["track_id"], color) > 0
+                 or (p["track_id"] is None and p["color"] == color))
+        ]
+        return max(candidates, key=lambda p: p["area"], default=None)
+
+    # ────────────────────────────────────
+    # 2. GECIS: SECILEN SPORCULARDAN KASK / AYAK KONUMLARINI URET
+    # ────────────────────────────────────
+    def build_features(self, persons: list, h: int, w: int) -> dict:
+        """Secilen sporcularin kask ve ayak konumlarindan temas analizi icin ozellikleri uretir."""
+        red_person = self._pick_person(persons, "red")
+        blue_person = self._pick_person(persons, "blue", exclude=red_person)
+
+        def get_all_feet(pts):
+            ankle_left, ankle_right = pts[15], pts[16]
+            ankles = [p for p in [ankle_left, ankle_right] if p[0] > 0 and p[1] > 0]
+            return [(int(p[0]), int(p[1])) for p in ankles]
+
+        def smooth_pt(new_pt, attr_name, max_jump=150, max_hold=10):
+            hist_pt = getattr(self, f"{attr_name}_hist", None)
+            lost_frames = getattr(self, f"{attr_name}_lost", 0)
+
+            if new_pt is not None and hist_pt is not None:
+                dist = np.hypot(new_pt[0] - hist_pt[0], new_pt[1] - hist_pt[1])
+                if dist > max_jump:
+                    new_pt = None # Ani atlama reddedildi
+
+            if new_pt is not None:
+                setattr(self, f"{attr_name}_hist", new_pt)
+                setattr(self, f"{attr_name}_lost", 0)
+                return new_pt
+            else:
+                if hist_pt is not None and lost_frames < max_hold:
+                    setattr(self, f"{attr_name}_lost", lost_frames + 1)
+                    return hist_pt
+                return None
+
+        raw_red_helm = None
+        raw_red_feet = []
+        raw_blue_helm = None
+        raw_blue_feet = []
+
+        if red_person:
+            pts = red_person["pts"]
+            if pts[0][0] > 0 and pts[0][1] > 0:
+                raw_red_helm = (int(pts[0][0]), int(pts[0][1]))
+            raw_red_feet = get_all_feet(pts)
+
+        if blue_person:
+            pts = blue_person["pts"]
+            if pts[0][0] > 0 and pts[0][1] > 0:
+                raw_blue_helm = (int(pts[0][0]), int(pts[0][1]))
+            raw_blue_feet = get_all_feet(pts)
+
+        # Sadece Kasklar icin ziplama filtresi kullan (Kafalar 200 piksellik isinlanma yapamaz)
+        # Ayaklar ise saniyede cok hizli hareket ettigi (ucan tekme) icin filtrelemeden direkt gonderiyoruz!
+        red_helmet_pt = smooth_pt(raw_red_helm, "red_helm", max_jump=200, max_hold=10)
+        blue_helmet_pt = smooth_pt(raw_blue_helm, "blue_helm", max_jump=200, max_hold=10)
 
         output = {}
         # Masks: 80px radius (160px total reach to catch overlapping hits)
@@ -147,8 +224,42 @@ class EquipmentSegmentor:
         output["red_foot"] = self._create_fake_features(raw_red_feet, h, w, radius=80)
         output["blue_helmet"] = self._create_fake_features([blue_helmet_pt] if blue_helmet_pt else [], h, w, radius=80)
         output["blue_foot"] = self._create_fake_features(raw_blue_feet, h, w, radius=80)
-        
+
         return output
+
+    def segment_video(self, frames):
+        """
+        Iki gecisli analiz: once tum karelerde kisiler tespit edilir, sonra sporcular video
+        geneline gore bir kez secilir ve her kare icin ozellikler uretilir.
+
+        Parameters
+        ----------
+        frames : iterable of np.ndarray
+            On-islemden gecmis kareler.
+
+        Returns
+        -------
+        iterator of dict
+            Her kare icin build_features() ciktisi. Maskeler buyuk oldugu icin
+            hepsi ayni anda bellekte tutulmaz, sirayla uretilir.
+        """
+        detections = []
+        h = w = 0
+        for frame in frames:
+            h, w = frame.shape[:2]
+            detections.append(self.detect_persons(frame))
+        self.select_athletes()
+        return (self.build_features(persons, h, w) for persons in detections)
+
+    def segment_frame(self, frame: np.ndarray) -> dict:
+        """
+        Tek kare (cevrimici) kullanim icin: sporcu secimi o ana kadar gorulen karelere gore yapilir.
+        Video analizi icin segment_video() tercih edilmelidir.
+        """
+        h, w = frame.shape[:2]
+        persons = self.detect_persons(frame)
+        self.select_athletes()
+        return self.build_features(persons, h, w)
 
     def _create_fake_features(self, pts_list, h, w, radius):
         mask = np.zeros((h, w), dtype=np.uint8)

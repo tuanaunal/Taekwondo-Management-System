@@ -76,23 +76,24 @@ class AnalysisWorker(QThread):
             self.error.emit(str(e))
 
     def _generate_overlays(self, video_path: str) -> list:
-        """Segmentasyon overlay karelerini oluşturur."""
+        """Segmentasyon overlay karelerini oluşturur (analizle aynı iki geçişli sporcu seçimi)."""
         preprocessor = VideoPreprocessor()
         segmentor = EquipmentSegmentor()
-        overlays = []
 
+        frames = []
         cap = cv2.VideoCapture(video_path)
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
-            processed = preprocessor.process_frame(frame)
-            seg_results = segmentor.segment_frame(processed)
-            overlay = segmentor.draw_segmentation(frame, seg_results, alpha=0.5)
-            overlays.append(overlay)
+            frames.append(frame)
         cap.release()
 
-        return overlays
+        frame_features = segmentor.segment_video(preprocessor.process_frame(f) for f in frames)
+        return [
+            segmentor.draw_segmentation(frame, seg_results, alpha=0.5)
+            for frame, seg_results in zip(frames, frame_features)
+        ]
 
 
 class MainWindow(QMainWindow):

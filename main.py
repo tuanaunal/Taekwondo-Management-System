@@ -90,17 +90,20 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     frame_log = []
     frame_idx = 0
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    # 1-2. On-isleme ve sporcu tespiti (iki gecis):
+    #   1. gecis: tum karelerde kisiler tespit edilir, kalici takip numaralari ve renk oylari toplanir
+    #   2. gecis: kirmizi/mavi sporcu video geneline gore secilir, her kare icin ozellikler uretilir
+    def processed_frames():
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            yield preprocessor.process_frame(frame)
 
-        # 1. On-isleme
-        processed = preprocessor.process_frame(frame)
+    frame_features = segmentor.segment_video(processed_frames())
+    cap.release()
 
-        # 2. Segmentasyon
-        seg_results = segmentor.segment_frame(processed)
-
+    for seg_results in frame_features:
         # 3. Takip
         tracking = tracker.update(seg_results, frame_idx)
 
@@ -174,8 +177,6 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
 
         if verbose and frame_idx % 10 == 0:
             print(f"  Islenen kare: {frame_idx}/{info['frame_count']}")
-
-    cap.release()
 
     if verbose:
         print(f"  Toplam islenen kare: {frame_idx}")
