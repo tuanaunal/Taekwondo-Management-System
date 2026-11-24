@@ -9,6 +9,20 @@ YOLO_MODEL_PATH = 'yolov8n-pose.pt'
 # Kameradan uzaktaki seyirci/antrenor gibi kucuk gorunen kisileri eler.
 MIN_ATHLETE_AREA_RATIO = 0.35
 
+# Iskelet noktasi guven esigi: YOLO'nun bu noktadan emin olma derecesi (0-1).
+# Esigin altindaki noktalar (orn. hareket bulanikligindaki ayak bilegi) "yok" sayilir.
+# 0.5, Ultralytics'in noktalari cizerken kullandigi varsayilan esiktir.
+KEYPOINT_CONF_THRESHOLD = 0.5
+
+# Gogus koruyucusu renk tespiti (HSV, OpenCV olcegi: H 0-180, S/V 0-255)
+# Karar renk tonu (H) ve doygunluga (S) dayanir; parlaklik (V) icin sadece cok dusuk bir
+# alt sinir vardir. Karartma/aydinlatma V'yi degistirir ama H ve S'yi neredeyse degistirmez.
+COLOR_MIN_SATURATION = 80     # Beyaz/gri dobok ve cilt gibi soluk pikselleri eler
+COLOR_MIN_VALUE = 30          # Tamamen siyah (renk tonu anlamsiz) pikselleri eler
+COLOR_MIN_FRACTION = 0.05     # Baskin renk, govde bolgesinin en az bu oraninda olmali
+RED_HUE_RANGES = [(0, 10), (160, 180)]
+BLUE_HUE_RANGE = (100, 140)
+
 logger = logging.getLogger(__name__)
 
 class EquipmentSegmentor:
@@ -39,22 +53,28 @@ class EquipmentSegmentor:
             return "unknown"
         torso_x1 = int(min(pts[5][0], pts[6][0])) if pts[6][0] > 0 else int(pts[5][0] - 20)
         torso_x2 = int(max(pts[5][0], pts[6][0])) if pts[6][0] > 0 else int(pts[5][0] + 20)
-        torso_y1 = int(min(pts[5][1], pts[6][1]))
-        torso_y2 = int(max(pts[11][1], pts[12][1]))
+        # Sag omuz/kalca yoksa (0, 0) sadece sol taraf kullanilir; aksi halde kutu karenin tepesine uzanirdi
+        torso_y1 = int(min(pts[5][1], pts[6][1])) if pts[6][0] > 0 else int(pts[5][1])
+        torso_y2 = int(max(pts[11][1], pts[12][1])) if pts[12][0] > 0 else int(pts[11][1])
         torso_x1, torso_y1 = max(0, torso_x1), max(0, torso_y1)
         torso_x2, torso_y2 = min(w, torso_x2), min(h, torso_y2)
         if torso_x1 >= torso_x2 or torso_y1 >= torso_y2:
             return "unknown"
 
         hsv = cv2.cvtColor(frame[torso_y1:torso_y2, torso_x1:torso_x2], cv2.COLOR_BGR2HSV)
-        mask_red1 = cv2.inRange(hsv, np.array([0, 100, 100]), np.array([10, 255, 255]))
-        mask_red2 = cv2.inRange(hsv, np.array([160, 100, 100]), np.array([180, 255, 255]))
-        red_pixels = cv2.countNonZero(cv2.bitwise_or(mask_red1, mask_red2))
-        blue_pixels = cv2.countNonZero(cv2.inRange(hsv, np.array([100, 150, 50]), np.array([140, 255, 255])))
+        hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+        chromatic = (sat >= COLOR_MIN_SATURATION) & (val >= COLOR_MIN_VALUE)
+        is_red = np.zeros_like(chromatic)
+        for lo, hi in RED_HUE_RANGES:
+            is_red |= (hue >= lo) & (hue <= hi)
+        is_blue = (hue >= BLUE_HUE_RANGE[0]) & (hue <= BLUE_HUE_RANGE[1])
+        red_pixels = int(np.count_nonzero(chromatic & is_red))
+        blue_pixels = int(np.count_nonzero(chromatic & is_blue))
 
-        if red_pixels > blue_pixels and red_pixels > 20:
+        min_pixels = max(20, COLOR_MIN_FRACTION * hue.size)
+        if red_pixels > blue_pixels and red_pixels >= min_pixels:
             return "red"
-        if blue_pixels > red_pixels and blue_pixels > 20:
+        if blue_pixels > red_pixels and blue_pixels >= min_pixels:
             return "blue"
         return "unknown"
 
@@ -71,20 +91,33 @@ class EquipmentSegmentor:
         if len(results) == 0 or results[0].keypoints is None:
             return []
 
-        keypoints = results[0].keypoints.xy.cpu().numpy()  # [N, 17, 2]
-        boxes = results[0].boxes.xyxy.cpu().numpy()         # [N, 4]
+        keypoints = results[0].keypoints.xy.cpu().numpy()          # [N, 17, 2]
+        boxes = results[0].boxes.xyxy.cpu().numpy()                # [N, 4]
+        if results[0].keypoints.conf is not None:
+            confs = results[0].keypoints.conf.cpu().numpy()         # [N, 17]
+        else:
+            confs = np.ones(keypoints.shape[:2], dtype=np.float32)
         ids = results[0].boxes.id
         track_ids = ids.int().cpu().tolist() if ids is not None else [None] * len(keypoints)
 
         persons = []
-        for pts, box, track_id in zip(keypoints, boxes, track_ids):
+        for pts, conf, box, track_id in zip(keypoints, confs, boxes, track_ids):
             if len(pts) < 17:
                 continue
+            # Renk tespiti icin govde kutusu sadece guvenilir omuz/kalca noktalarindan kurulur;
+            # guveni dusuk nokta (0, 0) yapilir ve _torso_color onu "yok" sayar.
+            # Not: Bas ve ayak noktalari burada filtrelenmez. Dusuk guvenli bir noktayi atinca
+            # yerine konacak bir sey olmadigi icin kafa/ayak o karede tamamen kayboluyordu
+            # (20 videoda 13 -> 10). Bu noktalarin guveni, yerine diger bas noktalarinin ve
+            # diz-ayak bilegi dogrultusunun kullanilabilecegi 8. ve 9. adimlarda kullanilacak.
+            torso_pts = pts.copy()
+            torso_pts[conf < KEYPOINT_CONF_THRESHOLD] = 0.0
             persons.append({
                 "pts": pts,
+                "conf": conf,
                 "track_id": track_id,
                 "area": float((box[2] - box[0]) * (box[3] - box[1])),
-                "color": self._torso_color(frame, pts),
+                "color": self._torso_color(frame, torso_pts),
             })
 
         max_area = max((p["area"] for p in persons), default=0.0)
