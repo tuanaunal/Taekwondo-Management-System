@@ -441,6 +441,9 @@ class EquipmentSegmentor:
         # Ayaklar ise saniyede cok hizli hareket ettigi (ucan tekme) icin filtrelemeden direkt gonderiyoruz!
         red_helmet_pt = smooth_pt(raw_red_helm, "red_helm", max_jump=200, max_hold=10)
         blue_helmet_pt = smooth_pt(raw_blue_helm, "blue_helm", max_jump=200, max_hold=10)
+        # Kask noktasi bu karede gercekten olculmedi mi (son konum mu tutuldu)?
+        red_held = red_helmet_pt is not None and red_helmet_pt != raw_red_helm
+        blue_held = blue_helmet_pt is not None and blue_helmet_pt != raw_blue_helm
 
         output = {}
         # Masks: 80px radius (160px total reach to catch overlapping hits)
@@ -451,6 +454,11 @@ class EquipmentSegmentor:
         # Bas merkezi (5 bas noktasindan) ve tahmini bas yaricapi (piksel).
         # Temas olcumu bunlari 12. adimda kullanacak; o zamana kadar maskeler eski
         # yontemle (burun + 80 px yaricap) uretilmeye devam ediyor.
+        # Hiz hesabinda sahte sicramalari ayiklamak icin: takip numarasi ve "tutulan konum" bayragi
+        output["red_helmet"]["track_id"] = red_person["track_id"] if red_person else None
+        output["blue_helmet"]["track_id"] = blue_person["track_id"] if blue_person else None
+        output["red_helmet"]["held"] = red_held
+        output["blue_helmet"]["held"] = blue_held
         output["red_helmet"]["head_center"] = red_head_center
         output["red_helmet"]["head_radius"] = red_head_radius
         output["blue_helmet"]["head_center"] = blue_head_center

@@ -34,9 +34,11 @@ from src.tracker import MultiObjectTracker
 from src.kinematics import KinematicAnalyzer
 from src.contact_analyzer import ContactAnalyzer
 from src.decision_engine import DecisionEngine
+from src.contact_moment import find_contact_moment
 
 
-def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True) -> dict:
+def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True,
+                  contact_frame: int = None) -> dict:
     """
     Tek bir video dosyasini uctan uca analiz eder.
 
@@ -48,6 +50,9 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
         Ayrintili cikti yazdir.
     save_graph : bool
         Ivme grafigini output/graphs klasorune kaydet (toplu testte kapatilir).
+    contact_frame : int, optional
+        Kullanicinin (orn. hakemin) isaretledigi, sensorun puan verdigi kare.
+        Verilmezse temas ani otomatik bulunur.
 
     Returns
     -------
@@ -59,6 +64,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
             'frame_log': list,          # Kare bazli log
             'graph_path': str,          # Ivme grafigi dosya yolu
             'video_info': dict,         # Video meta bilgileri
+            'contact_moment': dict,     # Temas ani (kare, yontem, hedef sporcu)
         }
     """
     # -- Modulleri baslat --
@@ -108,7 +114,15 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     if verbose:
         print(f"  Olcek faktoru: {segmentor.scale_factor:.2f}")
 
+    # Temas ani icin her karenin bas/ayak konumlari (maskeler olmadan, bellek dostu)
+    moment_features = []
+
     for seg_results in frame_features:
+        moment_features.append({
+            key: {k: v for k, v in seg_results.get(key, {}).items() if k != "mask" and k != "contours"}
+            for key in ("red_helmet", "blue_helmet", "red_foot", "blue_foot")
+        })
+
         # 3. Takip
         tracking = tracker.update(seg_results, frame_idx)
 
@@ -186,6 +200,15 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     if verbose:
         print(f"  Toplam islenen kare: {frame_idx}")
 
+    # -- Temas Ani --
+    contact_moment = find_contact_moment(moment_features, info["fps"], user_frame=contact_frame)
+    if verbose:
+        if contact_moment["frame"] is None:
+            print("  Temas ani: bulunamadi")
+        else:
+            print(f"  Temas ani: kare {contact_moment['frame']} ({contact_moment['time_sec']:.2f} sn) - "
+                  f"{contact_moment['method_tr']}, hedef: {contact_moment['target']}")
+
     # -- Temas Ozeti --
     contact_summary = contact_analyzer.analyze_video_contacts(frame_contacts)
 
@@ -260,6 +283,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
         "frame_log": frame_log,
         "graph_path": graph_path,
         "video_info": info,
+        "contact_moment": contact_moment,
     }
 
 
