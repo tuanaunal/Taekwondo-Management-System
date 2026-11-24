@@ -1,12 +1,32 @@
-# Taekwondo Ghost Hit Detection System 🥋🤖
-
-Bu proje, Taekwondo müsabakalarında yaşanan kask sensörü hatalarını (Ghost Hit - Hayalet Darbe) tespit etmek ve gerçek darbeleri (Real Hit) ayırt etmek amacıyla geliştirilmiş yapay zeka destekli, resmi bir **Karar Destek Sistemi (Decision Support System)**'dir.
+# Taekwondo'daki Elektronik Puanlama Hatalarının Bilgisayarlı Görü ile Tespiti: Hakem Karar Destek Sistemi 🥋
 
 ## 🚀 Proje Hakkında
 
-Müsabakalarda bazen sporcuların kaskları, bir tekme veya temas olmamasına rağmen ani hareketler veya savrulmalar sebebiyle darbe sensörünü tetiklemektedir. Bu durum hakemleri yanıltarak haksız puanlama (Ghost Hit) yaşanmasına neden olur.
+Taekwondo kurallarına göre rakibin kafasına yapılan geçerli her vuruş puan değeri taşır; ancak günümüz müsabakalarında bu puanı hakemler değil, elektronik bir sistem verir. Kafaya gerçekten isabet eden bir vuruş sensöre tam denk gelmediğinde puana dönüşmeyebilir; sensörler ise bazen gerçek bir temas olmadan tetiklenerek hatalı puan verebilir ("Ghost Hit" – hayalet darbe). Bu iki durum nedeniyle tartışmalı kararlar hâlâ hakemlerin gözle yaptığı incelemeye bağlıdır.
 
-Bu sistem, gelişmiş Görüntü İşleme (OpenCV) ve Obje Takibi algoritmalarını (YOLOv8 Pose & Segmentasyon) birleştirerek **"Çift Ayak ve Kask Takibi (Dual Foot Tracking)"** yapar. Gerçekleşen olayı sadece piksellerle değil, matematiksel ve kinematik temellere dayandırarak çözümler.
+Bu proje, sensörden bağımsız olarak yalnızca müsabaka görüntüsünü analiz edip kafaya gerçek bir temas olup olmadığını belirleyerek her iki soruna da çözüm getirmeyi amaçlar. Sistem, YOLOv8-Pose derin öğrenme modeliyle sporcuların iskelet noktalarını tespit eder; ayak ile baş arasındaki mesafeyi ve baştaki ani savrulmayı analiz ederek kararını grafikler ve PDF raporla gerekçelendirir. Hakemin yerini almak için değil, ona saniyeler içinde ikinci bir göz olmak için tasarlanmıştır.
+
+---
+
+## 📌 Problem Tanımı
+
+Taekwondo'da kafa vuruşlarının puanını elektronik sistem verir: puan, sporcunun ayak üstü koruyucusundaki sensör ile rakibin kaskındaki sensör eşleştiğinde oluşur. Kurallara göre ise kafaya isabet eden her geçerli vuruş puan değeri taşır. Bu fark iki tür hataya yol açar:
+
+1. **Ghost Hit (hayalet darbe):** Sensör puan verir, ama kafaya gerçek bir temas yoktur. Sporcu hak etmediği bir puan kazanır.
+2. **Kaçırılan vuruş:** Kafaya gerçek bir temas vardır, ama vuruş sensöre denk gelmediği için puan çıkmaz.
+
+**Sistemin cevapladığı soru:** Sensörden bağımsız olarak, yalnızca müsabaka görüntüsüne bakarak *"Tartışmalı anda kafaya gerçek bir temas oldu mu?"*
+
+Sistemin kararı (temas var / temas yok / belirsiz), sensörün o anda puan verip vermediği bilgisiyle birleştirilerek nihai sonuç elde edilir:
+
+| | Sistem: temas var | Sistem: temas yok |
+|---|---|---|
+| **Sensör puan verdi** | ✅ Puan geçerli | 🔴 Ghost Hit – puan hatalı |
+| **Sensör puan vermedi** | 🟠 Kaçırılan vuruş – puan verilmeli | ✅ Puan yok, karar doğru |
+
+Görüntü karar vermeye yetmiyorsa (ör. sporcular üst üste bindiğinde) sistem **"belirsiz"** sonucunu verir. Veri setindeki etiketler de bu soruya göredir: `Real_Hit` = kafaya gerçek temas var, `Ghost_Hit` = kafaya gerçek temas yok.
+
+> Not: Bu tanım projenin hedef yapısıdır. Karar motoru bu tabloya göre yol haritasının 17. adımında yeniden yazılacaktır.
 
 ---
 

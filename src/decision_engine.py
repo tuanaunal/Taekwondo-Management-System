@@ -4,15 +4,32 @@ decision_engine.py — Ghost Hit / Real Hit Karar Motoru
 Kinematik analiz ve temas analizi sonuçlarını birleştirerek
 nihai kararı verir.
 
-Karar Matrisi:
-┌──────────────┬───────────────┬──────────────────────────────┐
-│ Temas Durumu │ İvme Profili  │ Karar                        │
-├──────────────┼───────────────┼──────────────────────────────┤
-│ Temas VAR    │ Darbe İvmesi  │ ✅ Gerçek Darbe (Real Hit)   │
-│ Temas VAR    │ Aktif Kaçış   │ ⚠️ Hafif Temas               │
-│ Temas YOK    │ Darbe İvmesi  │ 🔶 Dış Etken / Yanlış Alarm │
-│ Temas YOK    │ Aktif Kaçış   │ 🔴 Ghost Hit                 │
-└──────────────┴───────────────┴──────────────────────────────┘
+PROBLEM TANIMI
+--------------
+Kafa vuruşunun puanı, ayak üstü koruyucusundaki sensör ile kasktaki
+sensörün eşleşmesiyle elektronik olarak verilir. İki tür hata oluşur:
+  - Ghost Hit:       Sensör puan verdi, ama kafaya gerçek temas yok.
+  - Kaçırılan vuruş: Kafaya gerçek temas var, ama sensör puan vermedi.
+
+Sistemin sorusu (sensörden bağımsız, sadece görüntüye bakarak):
+  "Tartışmalı anda kafaya gerçek bir temas oldu mu?"
+  -> temas var / temas yok / belirsiz
+
+HEDEF KARAR YAPISI (yol haritası 17. adımda uygulanacak)
+--------------------------------------------------------
+┌─────────────────────┬──────────────────────┬───────────────────────────┐
+│                     │ Sistem: TEMAS VAR    │ Sistem: TEMAS YOK         │
+├─────────────────────┼──────────────────────┼───────────────────────────┤
+│ Sensör puan verdi   │ ✅ Puan geçerli      │ 🔴 Ghost Hit (puan hatalı)│
+│ Sensör puan vermedi │ 🟠 Kaçırılan vuruş   │ ✅ Puan yok, doğru karar  │
+└─────────────────────┴──────────────────────┴───────────────────────────┘
+
+MEVCUT DURUM (geçici)
+---------------------
+Bu dosyadaki make_decision() henüz eski kategorileri üretir
+(REAL_HIT, LIGHT_CONTACT, EXTERNAL_FACTOR, GHOST_HIT, INCONCLUSIVE).
+Değerlendirmede GHOST_HIT ve EXTERNAL_FACTOR "temas yok",
+REAL_HIT ve LIGHT_CONTACT "temas var" olarak sayılır (bkz. evaluator.py).
 """
 
 from src.config import WEIGHT_CONTACT, WEIGHT_KINEMATICS, CONFIDENCE_THRESHOLD
