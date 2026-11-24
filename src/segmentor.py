@@ -23,6 +23,16 @@ COLOR_MIN_FRACTION = 0.05     # Baskin renk, govde bolgesinin en az bu oraninda 
 RED_HUE_RANGES = [(0, 10), (160, 180)]
 BLUE_HUE_RANGE = (100, 140)
 
+# YOLOv8-Pose (COCO) bas noktalari: 0 burun, 1 sol goz, 2 sag goz, 3 sol kulak, 4 sag kulak
+HEAD_KEYPOINTS = [0, 1, 2, 3, 4]
+
+# Bas yaricapi tahmini icin vucut oranlari (ortalama yetiskin olculeri):
+#   bas genisligi ~15 cm, iki kulak arasi ~bas genisligi, iki goz arasi ~6.3 cm,
+#   govde boyu (omuz ortasi - kalca ortasi) ~50 cm
+HEAD_RADIUS_PER_EAR_DISTANCE = 0.55     # yaricap ~ kulaklar arasi mesafenin yarisi (+ kask payi)
+HEAD_RADIUS_PER_EYE_DISTANCE = 1.2      # 15 / 6.3 / 2
+HEAD_RADIUS_PER_TORSO_LENGTH = 0.17     # (15 / 2 + kask payi) / 50
+
 logger = logging.getLogger(__name__)
 
 class EquipmentSegmentor:
@@ -198,6 +208,57 @@ class EquipmentSegmentor:
         return max(candidates, key=lambda p: p["area"], default=None)
 
     # ────────────────────────────────────
+    # BAS (KASK) BOLGESI
+    # ────────────────────────────────────
+    @staticmethod
+    def _head_center(pts: np.ndarray, conf: np.ndarray):
+        """
+        Bas merkezini burun, goz ve kulak noktalarindan hesaplar.
+
+        - Guvenilir (esigin ustundeki) bas noktalarinin guvene gore agirlikli ortalamasi alinir.
+          Sporcu basini cevirdiginde burun kaybolsa bile kulaklardan bas konumu bulunur.
+        - Hicbir bas noktasi guvenilir degilse, bilgi kaybolmasin diye gorunen en yuksek
+          guvenli bas noktasi kullanilir (eskiden kullanilan tek burun noktasina esdeger).
+        """
+        visible = [i for i in HEAD_KEYPOINTS if pts[i][0] > 0 and pts[i][1] > 0]
+        if not visible:
+            return None
+        reliable = [i for i in visible if conf[i] >= KEYPOINT_CONF_THRESHOLD]
+        if reliable:
+            weights = np.array([conf[i] for i in reliable], dtype=float)
+            center = np.average(np.array([pts[i] for i in reliable], dtype=float), axis=0, weights=weights)
+        else:
+            center = pts[max(visible, key=lambda i: conf[i])]
+        return (int(center[0]), int(center[1]))
+
+    @staticmethod
+    def _head_radius(pts: np.ndarray, conf: np.ndarray):
+        """
+        Bas yaricapini (piksel) vucut oranlarindan tahmin eder.
+
+        Uc tahmin yapilir: iki kulak arasi, iki goz arasi ve govde boyu (omuz ortasi - kalca
+        ortasi). Sporcu yana dondugunde kulaklar/gozler ust uste biner ve bu mesafeler
+        kisalir; yana donmek mesafeleri sadece kisaltabilir, uzatamaz. Bu yuzden mevcut
+        tahminlerin EN BUYUGU alinir. Hicbiri hesaplanamazsa None doner.
+        """
+        def ok(i):
+            return conf[i] >= KEYPOINT_CONF_THRESHOLD and pts[i][0] > 0 and pts[i][1] > 0
+
+        def dist(a, b):
+            return float(np.hypot(a[0] - b[0], a[1] - b[1]))
+
+        estimates = []
+        if ok(3) and ok(4):
+            estimates.append(dist(pts[3], pts[4]) * HEAD_RADIUS_PER_EAR_DISTANCE)
+        if ok(1) and ok(2):
+            estimates.append(dist(pts[1], pts[2]) * HEAD_RADIUS_PER_EYE_DISTANCE)
+        if ok(5) and ok(6) and ok(11) and ok(12):
+            shoulder_mid = (pts[5] + pts[6]) / 2.0
+            hip_mid = (pts[11] + pts[12]) / 2.0
+            estimates.append(dist(shoulder_mid, hip_mid) * HEAD_RADIUS_PER_TORSO_LENGTH)
+        return max(estimates) if estimates else None
+
+    # ────────────────────────────────────
     # 2. GECIS: SECILEN SPORCULARDAN KASK / AYAK KONUMLARINI URET
     # ────────────────────────────────────
     def build_features(self, persons: list, h: int, w: int) -> dict:
@@ -229,21 +290,36 @@ class EquipmentSegmentor:
                     return hist_pt
                 return None
 
+        def nose_point(pts):
+            if pts[0][0] > 0 and pts[0][1] > 0:
+                return (int(pts[0][0]), int(pts[0][1]))
+            return None
+
+        # Kask noktasi (hareket analizi icin) simdilik BURUN olarak kalir.
+        # Olcum: gercek darbede burun, bas merkezinden belirgin sekilde fazla hareket ediyor
+        # (Real Hit savrulma ortancasi: burun 140 px, bas merkezi 104 px; Ghost Hit'te ikisi ~100 px).
+        # Sebep, darbenin basi dondurmesi: burun basin onunde oldugu icin donuste yay cizer.
+        # Bas merkezine gecmek bu bilgiyi siliyordu (20 videoda 12 -> 10). Bas donusu 14. adimda
+        # ayri bir ozellik olarak eklenecek; bas merkezi ve yaricap 12. adimda temas icin kullanilacak.
         raw_red_helm = None
         raw_red_feet = []
         raw_blue_helm = None
         raw_blue_feet = []
+        red_head_center = red_head_radius = None
+        blue_head_center = blue_head_radius = None
 
         if red_person:
-            pts = red_person["pts"]
-            if pts[0][0] > 0 and pts[0][1] > 0:
-                raw_red_helm = (int(pts[0][0]), int(pts[0][1]))
+            pts, conf = red_person["pts"], red_person["conf"]
+            raw_red_helm = nose_point(pts)
+            red_head_center = self._head_center(pts, conf)
+            red_head_radius = self._head_radius(pts, conf)
             raw_red_feet = get_all_feet(pts)
 
         if blue_person:
-            pts = blue_person["pts"]
-            if pts[0][0] > 0 and pts[0][1] > 0:
-                raw_blue_helm = (int(pts[0][0]), int(pts[0][1]))
+            pts, conf = blue_person["pts"], blue_person["conf"]
+            raw_blue_helm = nose_point(pts)
+            blue_head_center = self._head_center(pts, conf)
+            blue_head_radius = self._head_radius(pts, conf)
             raw_blue_feet = get_all_feet(pts)
 
         # Sadece Kasklar icin ziplama filtresi kullan (Kafalar 200 piksellik isinlanma yapamaz)
@@ -257,6 +333,13 @@ class EquipmentSegmentor:
         output["red_foot"] = self._create_fake_features(raw_red_feet, h, w, radius=80)
         output["blue_helmet"] = self._create_fake_features([blue_helmet_pt] if blue_helmet_pt else [], h, w, radius=80)
         output["blue_foot"] = self._create_fake_features(raw_blue_feet, h, w, radius=80)
+        # Bas merkezi (5 bas noktasindan) ve tahmini bas yaricapi (piksel).
+        # Temas olcumu bunlari 12. adimda kullanacak; o zamana kadar maskeler eski
+        # yontemle (burun + 80 px yaricap) uretilmeye devam ediyor.
+        output["red_helmet"]["head_center"] = red_head_center
+        output["red_helmet"]["head_radius"] = red_head_radius
+        output["blue_helmet"]["head_center"] = blue_head_center
+        output["blue_helmet"]["head_radius"] = blue_head_radius
 
         return output
 
