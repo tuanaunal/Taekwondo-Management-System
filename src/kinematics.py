@@ -7,6 +7,7 @@ ayrımını matematiksel olarak yapar.
 """
 
 import numpy as np
+from scipy.signal import savgol_filter
 import matplotlib
 matplotlib.use("Agg")  # GUI olmadan grafik oluşturma
 import matplotlib.pyplot as plt
@@ -20,6 +21,13 @@ from src.config import (
 import os
 
 REFERENCE_FPS = 30.0  # Kare tabanlı eşiklerin ayarlandığı FPS
+
+# Savitzky–Golay filtresi: her noktanın çevresindeki kısa bir pencereye 2. derece polinom
+# oturtur. Hız ve ivme bu polinomun türevinden doğrudan hesaplanır; böylece gürültülü
+# koordinatın iki kez farkı alınmaz (fark almak gürültüyü katlıyordu).
+# Spor biyomekaniğinde yaygın yöntemdir: titremeyi bastırır, ani hareketi (darbe) korur.
+SAVGOL_WINDOW_SEC = 0.2   # Pencere süresi (30 FPS'te 7 kare)
+SAVGOL_POLYORDER = 2
 
 
 class KinematicAnalyzer:
@@ -35,21 +43,15 @@ class KinematicAnalyzer:
         # oranla ölçeklenerek farklı FPS'lerde aynı süreye/hıza denk gelir.
         self.frame_scale = fps / REFERENCE_FPS
 
-    def smooth_positions(self, positions: np.ndarray, window_size: int = 3) -> np.ndarray:
+    def _despike(self, positions: np.ndarray) -> np.ndarray:
         """
-        Yörünge koordinatlarındaki yüksek frekanslı titremeleri (jitter)
-        azaltmak için hareketli ortalama (moving average) filtresi uygular.
-        Ayrıca YOLO'nun imkansız sıçramalarını (1 karede >50 piksel) engeller.
+        Tek karelik hatalı sıçramaları düzeltir.
+        YOLO bazen tek bir karede kafa yerine başka bir noktayı (ör. ayak) verir:
+        konum bir karede uzağa sıçrar ve bir sonraki karede geri döner.
+        Sadece bu "gidip geri dönen" tekil sıçramalar komşuların ortalamasıyla
+        değiştirilir. Kalıcı yer değiştirme (gerçek darbede kafanın savrulması)
+        korunur; aksi halde takip donar ve darbe hareketsiz görünür.
         """
-        if len(positions) < window_size:
-            return positions
-            
-        # 1. Despike (Tek karelik hatalı sıçramaları filtrele)
-        # YOLO bazen tek bir karede kafa yerine başka bir noktayı (ör. ayak) verir:
-        # konum bir karede uzağa sıçrar ve bir sonraki karede geri döner.
-        # Sadece bu "gidip geri dönen" tekil sıçramalar komşuların ortalamasıyla
-        # değiştirilir. Kalıcı yer değiştirme (gerçek darbede kafanın savrulması)
-        # korunur; aksi halde takip donar ve darbe hareketsiz görünür.
         despiked = np.copy(positions)
         # 30 FPS'te kare başına 50 px; FPS arttıkça kare başına izin verilen
         # hareket aynı hıza denk gelecek şekilde azalır.
@@ -59,72 +61,92 @@ class KinematicAnalyzer:
             jump_back = np.linalg.norm(positions[i + 1] - positions[i - 1])
             if jump_out > MAX_JUMP and jump_back <= MAX_JUMP:
                 despiked[i] = (positions[i - 1] + positions[i + 1]) / 2.0
-                
-        # 2. Hareketli Ortalama (Moving Average)
-        smoothed = np.copy(despiked)
-        half_w = window_size // 2
-        for i in range(len(despiked)):
-            start = max(0, i - half_w)
-            end = min(len(despiked), i + half_w + 1)
-            smoothed[i] = np.mean(despiked[start:end], axis=0)
-            
-        return smoothed
+        return despiked
+
+    def _savgol_window(self, n: int) -> int:
+        """Pencere boyu: SAVGOL_WINDOW_SEC'e denk gelen tek sayılı kare sayısı (veri boyunu aşmaz)."""
+        w = int(round(SAVGOL_WINDOW_SEC * self.fps))
+        w = max(w, SAVGOL_POLYORDER + 2)
+        if w % 2 == 0:
+            w += 1
+        if w > n:
+            w = n if n % 2 == 1 else n - 1
+        return w
+
+    def kinematic_series(self, trajectory: list) -> dict:
+        """
+        Yörüngeden yumuşatılmış konum, hız ve ivme serilerini hesaplar.
+
+        1. Kareler eşit aralıklı olsun diye eksik kareler doğrusal ara değerle doldurulur.
+        2. Tek karelik hatalı sıçramalar düzeltilir (_despike).
+        3. Savitzky–Golay filtresiyle konum yumuşatılır; hız ve ivme vektörleri aynı
+           polinomun 1. ve 2. türevinden hesaplanır.
+
+        Returns
+        -------
+        dict
+            raw: (n, 2) ara değerli + sıçrama düzeltilmiş konum (yumuşatılmamış)
+            position: (n, 2) yumuşatılmış konum
+            velocity: (n, 2) hız vektörü (px/sn)
+            acceleration: (n, 2) ivme vektörü (px/sn²)
+            frames: (n,) kare numaraları
+        """
+        if len(trajectory) == 0:
+            empty = np.zeros((0, 2))
+            return {"raw": empty, "position": empty, "velocity": empty,
+                    "acceleration": empty, "frames": np.zeros(0)}
+
+        frames = np.array([t[2] for t in trajectory], dtype=float)
+        xy = np.array([(t[0], t[1]) for t in trajectory], dtype=float)
+        order = np.argsort(frames)
+        frames, xy = frames[order], xy[order]
+        frames, unique_idx = np.unique(frames, return_index=True)
+        xy = xy[unique_idx]
+
+        grid = np.arange(frames[0], frames[-1] + 1)
+        raw = np.column_stack([np.interp(grid, frames, xy[:, 0]), np.interp(grid, frames, xy[:, 1])])
+        raw = self._despike(raw)
+        n = len(raw)
+
+        w = self._savgol_window(n)
+        if n < SAVGOL_POLYORDER + 2 or w <= SAVGOL_POLYORDER:
+            # Çok kısa yörünge: filtre uygulanamaz, basit farkla devam edilir
+            vel = np.gradient(raw, self.dt, axis=0) if n > 1 else np.zeros_like(raw)
+            acc = np.gradient(vel, self.dt, axis=0) if n > 2 else np.zeros_like(raw)
+            return {"raw": raw, "position": raw, "velocity": vel, "acceleration": acc, "frames": grid}
+
+        pos = savgol_filter(raw, w, SAVGOL_POLYORDER, axis=0, mode="interp")
+        vel = savgol_filter(raw, w, SAVGOL_POLYORDER, deriv=1, delta=self.dt, axis=0, mode="interp")
+        acc = savgol_filter(raw, w, SAVGOL_POLYORDER, deriv=2, delta=self.dt, axis=0, mode="interp")
+        return {"raw": raw, "position": pos, "velocity": vel, "acceleration": acc, "frames": grid}
+
+    def smooth_positions(self, positions: np.ndarray, window_size: int = None) -> np.ndarray:
+        """Eşit aralıklı konum dizisini (n, 2) sıçrama düzeltme + Savitzky–Golay ile yumuşatır."""
+        positions = np.asarray(positions, dtype=float)
+        traj = [(x, y, i) for i, (x, y) in enumerate(positions)]
+        return self.kinematic_series(traj)["position"]
 
     # ────────────────────────────────────
-    # YER DEĞİŞTİRME HESABI
+    # YER DEĞİŞTİRME / HIZ / İVME
     # ────────────────────────────────────
     def compute_displacement(self, trajectory: list) -> np.ndarray:
-        """
-        Ardışık noktalar arasındaki piksel yer değiştirmesini hesaplar.
-        """
+        """Ardışık kareler arasındaki (yumuşatılmış) yer değiştirme, piksel."""
         if len(trajectory) < 2:
             return np.array([0.0])
-
-        positions = np.array([(t[0], t[1]) for t in trajectory], dtype=float)
-        positions = self.smooth_positions(positions, window_size=3)
-        diff = np.diff(positions, axis=0)
-        displacement = np.sqrt(diff[:, 0] ** 2 + diff[:, 1] ** 2)
-        return displacement
+        pos = self.kinematic_series(trajectory)["position"]
+        return np.linalg.norm(np.diff(pos, axis=0), axis=1)
 
     def compute_velocity(self, trajectory: list) -> np.ndarray:
-        """
-        Hız = ΔDisplacement / Δt (frame_idx farkı kullanılarak)
-        """
+        """Hız büyüklüğü (px/sn), Savitzky–Golay 1. türevinden."""
         if len(trajectory) < 2:
             return np.array([0.0])
-            
-        displacement = self.compute_displacement(trajectory)
-        
-        # Frame farklarını hesapla
-        frames = np.array([t[2] for t in trajectory], dtype=float)
-        frame_diffs = np.diff(frames)
-        
-        # 0'a bölme hatasını önle
-        frame_diffs[frame_diffs == 0] = 1.0
-        
-        # Her bir aralık için dt = frame_diff * self.dt
-        actual_dts = frame_diffs * self.dt
-        
-        velocity = displacement / actual_dts
-        return velocity
+        return np.linalg.norm(self.kinematic_series(trajectory)["velocity"], axis=1)
 
     def compute_acceleration(self, trajectory: list) -> np.ndarray:
-        """
-        İvme = ΔVelocity / Δt
-        """
-        velocity = self.compute_velocity(trajectory)
-        if len(velocity) < 2:
+        """İvme büyüklüğü (px/sn²), Savitzky–Golay 2. türevinden."""
+        if len(trajectory) < 3:
             return np.array([0.0])
-
-        frames = np.array([t[2] for t in trajectory], dtype=float)
-        # İvme için ardışık hızların zaman farkı, aslında noktalar arası orta noktaların zaman farkıdır
-        # Basitlik için hızlar arasındaki frame farkını, n. ve n+1. noktalar arasındaki fark olarak alıyoruz
-        frame_diffs = np.diff(frames[1:]) # length is len(velocity) - 1
-        frame_diffs[frame_diffs == 0] = 1.0
-        actual_dts = frame_diffs * self.dt
-
-        acceleration = np.diff(velocity) / actual_dts
-        return acceleration
+        return np.linalg.norm(self.kinematic_series(trajectory)["acceleration"], axis=1)
 
     # ────────────────────────────────────
     # İVME PROFİLİ SINIFLANDIRMA
@@ -190,14 +212,15 @@ class KinematicAnalyzer:
         # Gerçek darbede kafa geriye savrulur (net_disp > 165px). 
         # Ghost hitte kafa yerine döner veya az hareket eder (net_disp < 165px).
         net_disp = 0.0
-        # Pencere: zirvenin ~0.33 sn öncesi ve sonrası (30 FPS'te 10 kare)
+        # Pencere: zirvenin ~0.33 sn öncesi ve sonrası (30 FPS'te 10 kare).
+        # İvme serisi eşit aralıklı kare ızgarasında olduğu için konum da aynı ızgaradan alınır
+        # (yumuşatılmamış, sıçrama düzeltilmiş konum; savrulma bilgisi korunur).
+        raw_pos = self.kinematic_series(trajectory)["raw"]
         half_window = max(1, int(round(10 * self.frame_scale)))
-        if len(trajectory) > 2 * half_window:
+        if len(raw_pos) > 2 * half_window:
             start_idx = max(0, peak_idx - half_window)
-            end_idx = min(len(trajectory) - 1, peak_idx + half_window)
-            p_start = np.array([trajectory[start_idx][0], trajectory[start_idx][1]])
-            p_end = np.array([trajectory[end_idx][0], trajectory[end_idx][1]])
-            net_disp = np.linalg.norm(p_end - p_start)
+            end_idx = min(len(raw_pos) - 1, peak_idx + half_window)
+            net_disp = float(np.linalg.norm(raw_pos[end_idx] - raw_pos[start_idx]))
         
         result["net_displacement"] = net_disp
 

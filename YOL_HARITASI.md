@@ -12,6 +12,8 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 2. **Poz modeli yüksek tekmede kafaya uzanan bacağı yakalayamıyor.** Daha büyük poz modeli (YOLOv8m) de yakalamadı ve doğruluğu düşürdü (13 → 10). *(Adım 9)*
 3. **İki boyutlu görüntüde temas, temassız geçişten ayırt edilemiyor.** Segmentasyon (siluet) bacağı yakalasa da, saldıranın silüetinin rakip başı kaplama oranı Ghost Hit kliplerinde daha yüksek çıktı (ortanca %36'ya karşı %10): Ghost Hit'te de tekme başın hemen yanından geçiyor. *(Adım 11 sonrası test)*
 
+4. **Başın en yüksek ivmesi ayırt edici değil.** Gürültü giderildikten sonra bile en yüksek ivme Ghost Hit kliplerinde Real Hit'tekinden yüksek (ortanca 13.526'ya karşı 10.615 referans px/sn²). Eski rapordaki "gerçek darbe = keskin ivme tepesi" varsayımı veride doğrulanmıyor; ayırt edici olan, darbe anından sonraki savrulma ve dönüş. *(Adım 13)*
+
 **Sonuç:** Kararın ana dayanağı **başın darbeye verdiği fiziksel tepki** (dönüş, gövdeye göre savrulma) olmalı; temas geometrisi sadece destekleyici kanıttır.
 
 ---
@@ -35,7 +37,7 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | | **3. Aşama – Analiz** | | |
 | 11 | Temas anını bulmak (kullanıcı karesi > yaklaşım > baş hareketi) | ✅ | 34 (kısmen) |
 | 12 | Temas ölçümünü kafa yarıçapı ve ayak ucuyla yeniden yazmak *(küçültüldü: temas artık destekleyici kanıt)* | ✅ | 19, 21, 43 (kısmen) |
-| 13 | Hareket verisini doğru yumuşatmak (Savitzky–Golay) | | 24 |
+| 13 | Hareket verisini doğru yumuşatmak (Savitzky–Golay) | ✅ | 24 |
 | 14 | **Başın gövdeye göre hareketi ve baş dönüşü** *(ana özellik)* | | 25 |
 | 15 | Kinematik analizi temas anına odaklamak | | 26, 27, 28, 29 |
 | 16 | Takip modülünü sadeleştirmek | | 22, 23 |

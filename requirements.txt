@@ -7,3 +7,4 @@ PyQt5>=5.15.0
 ultralytics>=8.0.0
 fpdf==1.7.2
 lap>=0.5.12
+scipy>=1.10.0
