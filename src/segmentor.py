@@ -29,7 +29,10 @@ KEYPOINT_CONF_THRESHOLD = 0.5
 # alt sinir vardir. Karartma/aydinlatma V'yi degistirir ama H ve S'yi neredeyse degistirmez.
 COLOR_MIN_SATURATION = 80     # Beyaz/gri dobok ve cilt gibi soluk pikselleri eler
 COLOR_MIN_VALUE = 30          # Tamamen siyah (renk tonu anlamsiz) pikselleri eler
-COLOR_MIN_FRACTION = 0.05     # Baskin renk, govde bolgesinin en az bu oraninda olmali
+# Baskin renk, govde bolgesinin en az bu oraninda olmali. Gogus koruyucusu govdenin buyuk kismini
+# kaplar; arka plandan sizan renk (orn. hakemin arkasindaki mavi skor panosu) kucuk bir kismini.
+# Olcum (RH_04, RH_07): sporcularda ortanca %35-48, hakemde %7.8, masadaki gorevlide %2.
+COLOR_MIN_FRACTION = 0.15
 RED_HUE_RANGES = [(0, 10), (160, 180)]
 BLUE_HUE_RANGE = (100, 140)
 
@@ -56,6 +59,8 @@ FOOT_TIP_PER_SHANK_LENGTH = 0.35
 # olceklenir. Boylece kamera yakin/uzak ya da video 720p/1080p olsa da esikler ayni fiziksel
 # mesafeye denk gelir ("piksel" artik "referans piksel" demektir: 26 px = bir bas yaricapi).
 REFERENCE_HEAD_RADIUS = 26.0
+# Arayuzde ayak noktalarinin cizim yaricapi (referans px)
+FOOT_MARKER_RADIUS = 10
 REFERENCE_FRAME_HEIGHT = 1080      # Bas yaricapi hic olculemezse: eski davranis (1080p'ye olcekle)
 SCALE_LIMITS = (0.25, 4.0)         # Hatali olcumlere karsi olcek faktorunun izin verilen araligi
 # YOLOv8-Pose (COCO): 13 sol diz, 14 sag diz, 15 sol ayak bilegi, 16 sag ayak bilegi
@@ -446,11 +451,22 @@ class EquipmentSegmentor:
         blue_held = blue_helmet_pt is not None and blue_helmet_pt != raw_blue_helm
 
         output = {}
-        # Masks: 80px radius (160px total reach to catch overlapping hits)
-        output["red_helmet"] = self._create_fake_features([red_helmet_pt] if red_helmet_pt else [], h, w, radius=80)
-        output["red_foot"] = self._create_fake_features(raw_red_feet, h, w, radius=80)
-        output["blue_helmet"] = self._create_fake_features([blue_helmet_pt] if blue_helmet_pt else [], h, w, radius=80)
-        output["blue_foot"] = self._create_fake_features(raw_blue_feet, h, w, radius=80)
+        # Merkez noktalari (centroids): kask icin BURUN (hareket analizi bundan yapilir, bkz. Adim 8),
+        # ayak icin ayak bilegi. Maskeler sadece arayuzde gosterim icindir: kask maskesi gercek bas
+        # bolgesini (bas merkezi + tahmini yaricap), ayak maskesi ayak bilegi ve ayak ucunu gosterir.
+        output["red_helmet"] = self._create_fake_features([red_helmet_pt] if red_helmet_pt else [], h, w, radius=FOOT_MARKER_RADIUS)
+        output["red_foot"] = self._create_fake_features(raw_red_feet + red_foot_tips, h, w, radius=FOOT_MARKER_RADIUS)
+        output["blue_helmet"] = self._create_fake_features([blue_helmet_pt] if blue_helmet_pt else [], h, w, radius=FOOT_MARKER_RADIUS)
+        output["blue_foot"] = self._create_fake_features(raw_blue_feet + blue_foot_tips, h, w, radius=FOOT_MARKER_RADIUS)
+        for key, center, radius in [("red_helmet", red_head_center, red_head_radius),
+                                    ("blue_helmet", blue_head_center, blue_head_radius)]:
+            if center is not None and radius:
+                mask = np.zeros((h, w), dtype=np.uint8)
+                cv2.circle(mask, center, int(round(radius)), 255, -1)
+                output[key]["mask"] = mask
+        # Ayak maskesi ayak ucunu da icerir; centroids ise yalnizca ayak bilekleri olarak kalir
+        output["red_foot"]["centroids"] = list(raw_red_feet)
+        output["blue_foot"]["centroids"] = list(raw_blue_feet)
         # Bas merkezi (5 bas noktasindan) ve tahmini bas yaricapi (piksel).
         # Temas olcumu bunlari 12. adimda kullanacak; o zamana kadar maskeler eski
         # yontemle (burun + 80 px yaricap) uretilmeye devam ediyor.
@@ -582,9 +598,11 @@ class EquipmentSegmentor:
                     sx, sy = fw / mw, fh / mh
                     if (mh, mw) != (fh, fw):
                         mask = cv2.resize(mask, (fw, fh), interpolation=cv2.INTER_NEAREST)
-                    colored_mask = np.zeros_like(frame)
-                    colored_mask[mask > 0] = color
-                    cv2.addWeighted(colored_mask, alpha, overlay, 1 - alpha, 0, overlay)
+                    # Renk sadece maskenin oldugu piksellere karistirilir. (Eskiden tum kare
+                    # renkli maskeyle karistiriliyordu; her katman kareyi %50 karartiyor ve
+                    # 4 katmandan sonra goruntu neredeyse siyah kaliyordu.)
+                    sel = mask > 0
+                    overlay[sel] = (overlay[sel] * (1 - alpha) + np.array(color) * alpha).astype(np.uint8)
 
                 centroids = seg_results[key].get("centroids", [])
                 for cx, cy in centroids:

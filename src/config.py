@@ -105,17 +105,15 @@ EVASION_SMOOTHNESS_THRESHOLD = 0.6   # İvme varyasyon katsayısı eşiği
 # ──────────────────────────────────────────────
 # 7. TEMAS ANALİZİ EŞİKLERİ
 # ──────────────────────────────────────────────
-# Piksel bazlı çakışma eşiği — bu kadar piksel çakışırsa temas VAR
-# Not: Segmentasyon düzeltildikten sonra 20px yeterli hassasiyet sağlıyor
-CONTACT_OVERLAP_THRESHOLD = 20
-
-# Öklid mesafesi eşiği (piksel) — merkezler arası
-# Bu mesafeden yakınsa "yakın geçiş" (near miss), değilse "temas yok"
-PROXIMITY_THRESHOLD = 80
-
-# Kontur sınır mesafesi eşiği (piksel)
-# 20px içindeyse "yakın geçiş" (near miss)
-CONTOUR_DISTANCE_THRESHOLD = 20
+# Temas, ayak noktalarının (ayak ucu + ayak bileği) rakibin baş merkezine uzaklığıyla ölçülür.
+# Eşikler BAŞ YARIÇAPI cinsindendir; böylece kamera uzaklığından bağımsızdır.
+#   uzaklık <= (1 + CONTACT_MARGIN_RADII) yarıçap   -> temas
+#   uzaklık <= (1 + NEAR_MISS_MARGIN_RADII) yarıçap -> yakın geçiş (near miss)
+# Pay, ayak genişliği ve iskelet noktası tahmin hatası içindir.
+CONTACT_MARGIN_RADII = 0.5
+NEAR_MISS_MARGIN_RADII = 1.5
+# Not: İki boyutlu görüntüde temas ile temassız geçiş ayırt edilemeyebilir (bkz. YOL_HARITASI.md,
+# Bulgu 3). Bu yüzden temas kararda sadece destekleyici bir kanıttır.
 
 # ──────────────────────────────────────────────
 # 8. GÖRSELLEŞTİRME AYARLARI
