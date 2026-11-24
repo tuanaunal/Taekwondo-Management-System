@@ -1,11 +1,16 @@
 """
-main.py — Taekwondo Ghost Hit Detection: CLI Giris Noktasi
+main.py — Taekwondo Ghost Hit Detection: Tek Giris Noktasi
 ============================================================
-Tek bir video dosyasini analiz ederek Ghost Hit / Real Hit karari verir.
+Projenin tek giris noktasidir.
 
 Kullanim:
-    python main.py <video_yolu>
+    python main.py                               -> Arayuz (GUI) acilir
+    python main.py <video_yolu>                  -> Tek video komut satirinda analiz edilir
     python main.py Dataset/Ghost_Hit/GH_01.mp4
+
+Not: Windows'ta PyQt5, PyTorch'tan once yuklenirse torch DLL'leri acilamiyor
+(WinError 1114). Bu dosya src modullerini (ve dolayisiyla torch'u) en basta
+yukledigi icin arayuz sorunsuz acilir.
 """
 
 import sys

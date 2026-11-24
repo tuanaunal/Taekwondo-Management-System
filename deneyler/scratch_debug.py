@@ -2,7 +2,7 @@ import sys
 import os
 
 # Proje kok dizinini Python yoluna ekle
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from main import analyze_video
 
