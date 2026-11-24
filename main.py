@@ -27,7 +27,7 @@ if sys.stdout.encoding != 'utf-8':
 # Proje kok dizinini Python yoluna ekle
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.config import GRAPHS_DIR, LOGS_DIR, TARGET_FPS
+from src.config import GRAPHS_DIR, LOGS_DIR
 from src.preprocessor import VideoPreprocessor, load_video, get_video_info
 from src.segmentor import EquipmentSegmentor
 from src.tracker import MultiObjectTracker
@@ -65,20 +65,23 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     preprocessor = VideoPreprocessor()
     segmentor = EquipmentSegmentor()
     tracker = MultiObjectTracker(max_disappeared=5)
-    kinematic_analyzer = KinematicAnalyzer(fps=TARGET_FPS)
     contact_analyzer = ContactAnalyzer()
     decision_engine = DecisionEngine()
 
     # -- Video ac --
     cap = load_video(video_path)
     info = get_video_info(cap)
+    # Hız ve ivme, videonun gerçek FPS değeriyle hesaplanır (60 FPS / ağır çekim
+    # videolarda 30 FPS varsaymak ivmeleri 4 kata kadar yanlış çıkarır).
+    kinematic_analyzer = KinematicAnalyzer(fps=info["fps"])
     video_name = os.path.splitext(os.path.basename(video_path))[0]
 
     if verbose:
         print(f"\n{'-' * 50}")
         print(f"  Video: {video_name}")
         print(f"  Cozunurluk: {info['width']}x{info['height']}")
-        print(f"  FPS: {info['fps']:.0f} | Kare: {info['frame_count']}")
+        fps_note = " (okunamadi, varsayilan)" if info["fps_estimated"] else ""
+        print(f"  FPS: {info['fps']:.0f}{fps_note} | Kare: {info['frame_count']}")
         print(f"  Sure: {info['duration_sec']:.2f}s")
         print(f"{'-' * 50}")
 

@@ -30,6 +30,8 @@ for d in [LOGS_DIR, GRAPHS_DIR, REPORTS_DIR]:
 # ──────────────────────────────────────────────
 # 2. VIDEO STANDARDIZASYON
 # ──────────────────────────────────────────────
+# Videonun FPS bilgisi okunamazsa kullanılan varsayılan değer.
+# Kinematik hesaplar her zaman videonun GERÇEK FPS değeriyle yapılır.
 TARGET_FPS = 30
 TARGET_WIDTH = 1920
 TARGET_HEIGHT = 1080
@@ -96,7 +98,8 @@ ACCELERATION_IMPACT_THRESHOLD = 1500.0
 # İvme profili sınıflandırma parametreleri
 # Darbe ivmesi: kısa sürede yüksek tepe noktası
 # Aktif kaçış: kademeli, düşük ivme
-IMPACT_DURATION_MAX_FRAMES = 5       # Darbe en fazla bu kadar frame sürer
+IMPACT_DURATION_MAX_FRAMES = 5       # Darbe en fazla bu kadar frame sürer (30 FPS referansıyla;
+                                     # farklı FPS'te aynı süreye denk gelecek şekilde ölçeklenir)
 EVASION_SMOOTHNESS_THRESHOLD = 0.6   # İvme varyasyon katsayısı eşiği
 
 # ──────────────────────────────────────────────

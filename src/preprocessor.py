@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 from src.config import (
     CLAHE_CLIP_LIMIT, CLAHE_TILE_GRID_SIZE,
-    TARGET_WIDTH, TARGET_HEIGHT,
+    TARGET_FPS, TARGET_WIDTH, TARGET_HEIGHT,
 )
 
 
@@ -110,11 +110,22 @@ def load_video(video_path: str) -> cv2.VideoCapture:
 
 
 def get_video_info(cap: cv2.VideoCapture) -> dict:
-    """VideoCapture nesnesinden video meta bilgilerini döner."""
+    """
+    VideoCapture nesnesinden video meta bilgilerini döner.
+
+    Bazı video dosyaları FPS bilgisini 0 veya geçersiz döndürür; bu durumda
+    varsayılan TARGET_FPS kullanılır ve "fps_estimated" True olur.
+    """
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    fps_estimated = not (fps and fps == fps and 1.0 <= fps <= 1000.0)  # fps == fps: NaN kontrolü
+    if fps_estimated:
+        fps = float(TARGET_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     return {
-        "fps": cap.get(cv2.CAP_PROP_FPS),
+        "fps": fps,
+        "fps_estimated": fps_estimated,
         "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
         "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-        "frame_count": int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
-        "duration_sec": int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) / max(cap.get(cv2.CAP_PROP_FPS), 1),
+        "frame_count": frame_count,
+        "duration_sec": frame_count / fps,
     }

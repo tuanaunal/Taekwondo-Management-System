@@ -19,6 +19,8 @@ from src.config import (
 )
 import os
 
+REFERENCE_FPS = 30.0  # Kare tabanlı eşiklerin ayarlandığı FPS
+
 
 class KinematicAnalyzer:
     """
@@ -29,6 +31,9 @@ class KinematicAnalyzer:
     def __init__(self, fps: float = TARGET_FPS):
         self.fps = fps
         self.dt = 1.0 / fps  # Kare aralığı (saniye)
+        # Eşikler 30 FPS'te ayarlandı. Kare sayısıyla ifade edilen sabitler bu
+        # oranla ölçeklenerek farklı FPS'lerde aynı süreye/hıza denk gelir.
+        self.frame_scale = fps / REFERENCE_FPS
 
     def smooth_positions(self, positions: np.ndarray, window_size: int = 3) -> np.ndarray:
         """
@@ -46,7 +51,9 @@ class KinematicAnalyzer:
         # değiştirilir. Kalıcı yer değiştirme (gerçek darbede kafanın savrulması)
         # korunur; aksi halde takip donar ve darbe hareketsiz görünür.
         despiked = np.copy(positions)
-        MAX_JUMP = 50.0
+        # 30 FPS'te kare başına 50 px; FPS arttıkça kare başına izin verilen
+        # hareket aynı hıza denk gelecek şekilde azalır.
+        MAX_JUMP = 50.0 / self.frame_scale
         for i in range(1, len(positions) - 1):
             jump_out = np.linalg.norm(positions[i] - positions[i - 1])
             jump_back = np.linalg.norm(positions[i + 1] - positions[i - 1])
@@ -183,9 +190,11 @@ class KinematicAnalyzer:
         # Gerçek darbede kafa geriye savrulur (net_disp > 165px). 
         # Ghost hitte kafa yerine döner veya az hareket eder (net_disp < 165px).
         net_disp = 0.0
-        if len(trajectory) > 20:
-            start_idx = max(0, peak_idx - 10)
-            end_idx = min(len(trajectory) - 1, peak_idx + 10)
+        # Pencere: zirvenin ~0.33 sn öncesi ve sonrası (30 FPS'te 10 kare)
+        half_window = max(1, int(round(10 * self.frame_scale)))
+        if len(trajectory) > 2 * half_window:
+            start_idx = max(0, peak_idx - half_window)
+            end_idx = min(len(trajectory) - 1, peak_idx + half_window)
             p_start = np.array([trajectory[start_idx][0], trajectory[start_idx][1]])
             p_end = np.array([trajectory[end_idx][0], trajectory[end_idx][1]])
             net_disp = np.linalg.norm(p_end - p_start)
@@ -198,7 +207,8 @@ class KinematicAnalyzer:
         # ── Kriter 2: İvme süresi (kaç frame boyunca yüksek?) ──
         high_acc_mask = abs_acc > (ACCELERATION_IMPACT_THRESHOLD * 0.5)
         high_acc_duration = np.sum(high_acc_mask)
-        is_short_duration = 0 < high_acc_duration <= IMPACT_DURATION_MAX_FRAMES
+        max_impact_frames = IMPACT_DURATION_MAX_FRAMES * self.frame_scale
+        is_short_duration = 0 < high_acc_duration <= max_impact_frames
 
         # ── Kriter 3: İvme varyasyon katsayısı ──
         mean_acc = np.mean(abs_acc) if np.mean(abs_acc) > 0 else 1e-6
