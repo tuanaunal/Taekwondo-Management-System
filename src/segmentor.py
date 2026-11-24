@@ -9,6 +9,16 @@ YOLO_MODEL_PATH = 'yolov8n-pose.pt'
 # Kameradan uzaktaki seyirci/antrenor gibi kucuk gorunen kisileri eler.
 MIN_ATHLETE_AREA_RATIO = 0.35
 
+# Kimlik kopmasi: sporcu darbeyle dondugunde/dustugunde ByteTrack ona yeni bir takip numarasi
+# verebilir ve o an gogus koruyucusu gorunmedigi icin renk oyu da olmaz. Bu durumda sporcu,
+# son goruldugu konuma en yakin kisi ile surdurulur. Izin verilen en buyuk kayma: son kutunun
+# kosegen uzunlugunun bu orani (bir karede bir insanin yarim boydan fazla yer degistirmesi beklenmez).
+REID_MAX_SHIFT_RATIO = 0.5
+# Iki takip numarasi en az bu kadar karede BIRLIKTE gorunduyse farkli kisilerdir.
+# 1-2 karelik birliktelik, YOLO'nun ayni kisiyi ust uste iki kutuyla tespit etmesinden
+# kaynaklanabilir (orn. RH_07'de dusen sporcu); bu yuzden tek kare yeterli sayilmaz.
+MIN_COOCCURRENCE_FRAMES = 3
+
 # Iskelet noktasi guven esigi: YOLO'nun bu noktadan emin olma derecesi (0-1).
 # Esigin altindaki noktalar (orn. hareket bulanikligindaki ayak bilegi) "yok" sayilir.
 # 0.5, Ultralytics'in noktalari cizerken kullandigi varsayilan esiktir.
@@ -33,6 +43,14 @@ HEAD_RADIUS_PER_EAR_DISTANCE = 0.55     # yaricap ~ kulaklar arasi mesafenin yar
 HEAD_RADIUS_PER_EYE_DISTANCE = 1.2      # 15 / 6.3 / 2
 HEAD_RADIUS_PER_TORSO_LENGTH = 0.17     # (15 / 2 + kask payi) / 50
 
+# Ayak ucu tahmini. Kafa vurusunda (dollyo chagi vb.) ayak bilekten ileri uzatilmis olur ve
+# kafaya ayagin ustu / parmak tarafi deger; bu bolge ayak bileginden ~12-15 cm ileridedir.
+# Ayak ucu, diz -> ayak bilegi dogrultusu uzatilarak tahmin edilir.
+#   kaval kemigi (diz - ayak bilegi) ~42 cm  ->  15 / 42 ~ 0.35
+FOOT_TIP_PER_SHANK_LENGTH = 0.35
+# YOLOv8-Pose (COCO): 13 sol diz, 14 sag diz, 15 sol ayak bilegi, 16 sag ayak bilegi
+LEGS = [(13, 15), (14, 16)]
+
 logger = logging.getLogger(__name__)
 
 class EquipmentSegmentor:
@@ -47,9 +65,11 @@ class EquipmentSegmentor:
         # Kalici kimlik: ByteTrack her kisiye video boyunca ayni takip numarasini verir.
         # Her takip numarasi icin renk oylari ve gorunurluk istatistigi tutulur.
         self.color_votes = {}   # track_id -> {"red": int, "blue": int}
-        self.track_stats = {}   # track_id -> {"frames": int, "prominence": float}
+        self.track_stats = {}   # track_id -> {"frames": int, "prominence": float, "seen": set}
+        self._frame_counter = 0  # 1. geciste islenen kare sayisi
         self.red_track = None   # Video geneline gore secilen kirmizi sporcunun takip numarasi
         self.blue_track = None  # Video geneline gore secilen mavi sporcunun takip numarasi
+        self._last_box = {"red": None, "blue": None}  # Sporcunun son goruldugu kutu (2. gecis)
 
     # ────────────────────────────────────
     # RENK TESPITI (gogus koruyucusu / hogu)
@@ -125,17 +145,22 @@ class EquipmentSegmentor:
             persons.append({
                 "pts": pts,
                 "conf": conf,
+                "box": box,
                 "track_id": track_id,
                 "area": float((box[2] - box[0]) * (box[3] - box[1])),
                 "color": self._torso_color(frame, torso_pts),
             })
 
+        frame_no = self._frame_counter
+        self._frame_counter += 1
         max_area = max((p["area"] for p in persons), default=0.0)
         for p in persons:
             if p["track_id"] is None:
                 continue
-            stats = self.track_stats.setdefault(p["track_id"], {"frames": 0, "prominence": 0.0})
+            stats = self.track_stats.setdefault(
+                p["track_id"], {"frames": 0, "prominence": 0.0, "seen": set()})
             stats["frames"] += 1
+            stats["seen"].add(frame_no)  # Bu kisinin gorundugu kareler (kimlik kopmasi kontrolu icin)
             # Gorunurluk: kisinin bu karedeki boyutu, karedeki en buyuk kisiye gore (0-1)
             stats["prominence"] += p["area"] / max_area if max_area > 0 else 0.0
             if p["color"] != "unknown":
@@ -185,22 +210,68 @@ class EquipmentSegmentor:
         self.red_track, self.blue_track = pair["red"], pair["blue"]
         logger.info(f"Secilen sporcular: kirmizi id={self.red_track}, mavi id={self.blue_track}")
 
+    def _seen_with(self, track_a, track_b) -> bool:
+        """Iki takip numarasi yeterince karede birlikte gorundu mu? (oyleyse farkli kisilerdir)"""
+        a = self.track_stats.get(track_a, {}).get("seen", set())
+        b = self.track_stats.get(track_b, {}).get("seen", set())
+        return len(a & b) >= MIN_COOCCURRENCE_FRAMES
+
     def _pick_person(self, persons: list, color: str, exclude=None):
         """
-        Secilen sporcuyu bu karede bulur. Sporcunun takip numarasi bu karede yoksa
-        (ByteTrack kimligi kisa sureligine kopardiginda), video geneli puani bu renge
-        uygun olan baska bir buyuk kisi yedek olarak kullanilir.
+        Secilen sporcuyu bu karede bulur.
+
+        1. Sporcunun takip numarasi bu karede varsa o kisi secilir.
+        2. Yoksa (kimlik koptuysa), sporcunun son goruldugu konuma en yakin kisi secilir.
+           Darbe alip donen/dusen sporcu tam bu durumdadir: yeni takip numarasi alir ve o an
+           gogus koruyucusu gorunmedigi icin renk oyu yoktur.
+           Aday olamayanlar: rakip sporcunun parcasi (diger renkte oyu olan kisi) ve sporcuyla
+           AYNI KAREDE gorunmus herkes (orn. arkadaki gorevli, hakem) - ayni anda ekranda
+           olan biri o sporcu olamaz.
+        3. Son konum bilinmiyorsa, video geneli puani bu renge uygun en buyuk kisi secilir
+           (yine sporcuyla ayni karede gorunmus kisiler haric).
+        Uygun kimse yoksa sporcu bu karede "yok" sayilir: yanlis kisiyi secmek (orn. hakem),
+        sporcuyu bir kare kaybetmekten cok daha zararlidir.
         """
         target = self.red_track if color == "red" else self.blue_track
+        other = "blue" if color == "red" else "red"
+        chosen = None
         if target is not None:
+            chosen = next((p for p in persons if p["track_id"] == target), None)
+
+        if chosen is None and self._last_box[color] is not None:
+            lx1, ly1, lx2, ly2 = self._last_box[color]
+            last_center = np.array([(lx1 + lx2) / 2.0, (ly1 + ly2) / 2.0])
+            max_shift = REID_MAX_SHIFT_RATIO * float(np.hypot(lx2 - lx1, ly2 - ly1))
+            nearby = []
             for p in persons:
-                if p["track_id"] == target:
-                    return p
+                if p is exclude or p["track_id"] in (self.red_track, self.blue_track):
+                    continue
+                if self._athlete_score(p["track_id"], other) > 0:
+                    continue
+                if self._seen_with(p["track_id"], target):
+                    continue  # Sporcuyla ayni anda ekranda gorunmus: baska bir kisi
+                x1, y1, x2, y2 = p["box"]
+                shift = float(np.linalg.norm(np.array([(x1 + x2) / 2.0, (y1 + y2) / 2.0]) - last_center))
+                if shift <= max_shift:
+                    nearby.append((shift, p))
+            if nearby:
+                chosen = min(nearby, key=lambda t: t[0])[1]
+
+        if chosen is None:
+            chosen = self._pick_by_color(persons, color, exclude, target)
+
+        if chosen is not None:
+            self._last_box[color] = chosen["box"]
+        return chosen
+
+    def _pick_by_color(self, persons: list, color: str, exclude=None, target=None):
+        """Yedek secim: video geneli puani bu renge uygun en buyuk kisi."""
         max_area = max((p["area"] for p in persons), default=0.0)
         candidates = [
             p for p in persons
             if p is not exclude
             and p["track_id"] not in (self.red_track, self.blue_track)
+            and not (target is not None and self._seen_with(p["track_id"], target))
             and p["area"] >= MIN_ATHLETE_AREA_RATIO * max_area
             and (self._athlete_score(p["track_id"], color) > 0
                  or (p["track_id"] is None and p["color"] == color))
@@ -259,6 +330,35 @@ class EquipmentSegmentor:
         return max(estimates) if estimates else None
 
     # ────────────────────────────────────
+    # AYAK UCU
+    # ────────────────────────────────────
+    @staticmethod
+    def _foot_tips(pts: np.ndarray, conf: np.ndarray) -> list:
+        """
+        Her bacak icin ayagin kafaya degen kismini (ayak ustu / parmak tarafi) tahmin eder.
+
+        - Diz ve ayak bilegi gorunuyorsa: ayak ucu = ayak bilegi + 0.35 x (ayak bilegi - diz)
+        - Sadece ayak bilegi gorunuyorsa: ayak bilegi kullanilir (eski davranis, bilgi kaybolmaz)
+        Guveni dusuk diz, dogrultuyu bozmamak icin kullanilmaz; guveni dusuk ayak bilegi ise
+        yerine konacak bir sey olmadigi icin yine kullanilir.
+        """
+        def visible(i):
+            return pts[i][0] > 0 and pts[i][1] > 0
+
+        tips = []
+        for knee, ankle in LEGS:
+            if not visible(ankle):
+                continue
+            a = np.asarray(pts[ankle], dtype=float)
+            if visible(knee) and conf[knee] >= KEYPOINT_CONF_THRESHOLD:
+                k = np.asarray(pts[knee], dtype=float)
+                tip = a + FOOT_TIP_PER_SHANK_LENGTH * (a - k)
+            else:
+                tip = a
+            tips.append((int(tip[0]), int(tip[1])))
+        return tips
+
+    # ────────────────────────────────────
     # 2. GECIS: SECILEN SPORCULARDAN KASK / AYAK KONUMLARINI URET
     # ────────────────────────────────────
     def build_features(self, persons: list, h: int, w: int) -> dict:
@@ -307,6 +407,8 @@ class EquipmentSegmentor:
         raw_blue_feet = []
         red_head_center = red_head_radius = None
         blue_head_center = blue_head_radius = None
+        red_foot_tips = []
+        blue_foot_tips = []
 
         if red_person:
             pts, conf = red_person["pts"], red_person["conf"]
@@ -314,6 +416,7 @@ class EquipmentSegmentor:
             red_head_center = self._head_center(pts, conf)
             red_head_radius = self._head_radius(pts, conf)
             raw_red_feet = get_all_feet(pts)
+            red_foot_tips = self._foot_tips(pts, conf)
 
         if blue_person:
             pts, conf = blue_person["pts"], blue_person["conf"]
@@ -321,6 +424,7 @@ class EquipmentSegmentor:
             blue_head_center = self._head_center(pts, conf)
             blue_head_radius = self._head_radius(pts, conf)
             raw_blue_feet = get_all_feet(pts)
+            blue_foot_tips = self._foot_tips(pts, conf)
 
         # Sadece Kasklar icin ziplama filtresi kullan (Kafalar 200 piksellik isinlanma yapamaz)
         # Ayaklar ise saniyede cok hizli hareket ettigi (ucan tekme) icin filtrelemeden direkt gonderiyoruz!
@@ -340,6 +444,10 @@ class EquipmentSegmentor:
         output["red_helmet"]["head_radius"] = red_head_radius
         output["blue_helmet"]["head_center"] = blue_head_center
         output["blue_helmet"]["head_radius"] = blue_head_radius
+        # Tahmini ayak uclari (ayak ustu / parmak tarafi). Temas olcumu 12. adimda bunlari
+        # kullanacak; o zamana kadar ayak maskeleri ayak bileginden uretilmeye devam ediyor.
+        output["red_foot"]["foot_tips"] = red_foot_tips
+        output["blue_foot"]["foot_tips"] = blue_foot_tips
 
         return output
 
