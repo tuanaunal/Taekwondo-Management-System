@@ -349,6 +349,20 @@ class EquipmentSegmentor:
     # AYAK UCU
     # ────────────────────────────────────
     @staticmethod
+    def _torso_center(pts: np.ndarray, conf: np.ndarray):
+        """
+        Govde merkezi: guvenilir omuz ve kalca noktalarinin ortalamasi.
+        Basin govdeye gore hareketini olcmek icin kullanilir (sporcunun tum vucuduyla
+        geri kacmasi ile darbeyle basin savrulmasini ayirmak icin). Yoksa None.
+        """
+        idx = [i for i in (5, 6, 11, 12)
+               if conf[i] >= KEYPOINT_CONF_THRESHOLD and pts[i][0] > 0 and pts[i][1] > 0]
+        if len(idx) < 2:
+            return None
+        c = np.mean([pts[i] for i in idx], axis=0)
+        return (float(c[0]), float(c[1]))
+
+    @staticmethod
     def _foot_tips(pts: np.ndarray, conf: np.ndarray) -> list:
         """
         Her bacak icin ayagin kafaya degen kismini (ayak ustu / parmak tarafi) tahmin eder.
@@ -424,6 +438,7 @@ class EquipmentSegmentor:
         red_head_center = red_head_radius = None
         blue_head_center = blue_head_radius = None
         red_foot_tips = []
+        red_torso = blue_torso = None
         blue_foot_tips = []
 
         if red_person:
@@ -433,6 +448,7 @@ class EquipmentSegmentor:
             red_head_radius = self._head_radius(pts, conf)
             raw_red_feet = get_all_feet(pts)
             red_foot_tips = self._foot_tips(pts, conf)
+            red_torso = self._torso_center(pts, conf)
 
         if blue_person:
             pts, conf = blue_person["pts"], blue_person["conf"]
@@ -441,6 +457,7 @@ class EquipmentSegmentor:
             blue_head_radius = self._head_radius(pts, conf)
             raw_blue_feet = get_all_feet(pts)
             blue_foot_tips = self._foot_tips(pts, conf)
+            blue_torso = self._torso_center(pts, conf)
 
         # Sadece Kasklar icin ziplama filtresi kullan (Kafalar 200 piksellik isinlanma yapamaz)
         # Ayaklar ise saniyede cok hizli hareket ettigi (ucan tekme) icin filtrelemeden direkt gonderiyoruz!
@@ -471,6 +488,9 @@ class EquipmentSegmentor:
         # Temas olcumu bunlari 12. adimda kullanacak; o zamana kadar maskeler eski
         # yontemle (burun + 80 px yaricap) uretilmeye devam ediyor.
         # Hiz hesabinda sahte sicramalari ayiklamak icin: takip numarasi ve "tutulan konum" bayragi
+        # Govde merkezi (bas tepkisi olcumu icin, bkz. head_response.py)
+        output["red_helmet"]["torso_center"] = red_torso
+        output["blue_helmet"]["torso_center"] = blue_torso
         output["red_helmet"]["track_id"] = red_person["track_id"] if red_person else None
         output["blue_helmet"]["track_id"] = blue_person["track_id"] if blue_person else None
         output["red_helmet"]["held"] = red_held

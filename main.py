@@ -35,6 +35,7 @@ from src.kinematics import KinematicAnalyzer
 from src.contact_analyzer import ContactAnalyzer
 from src.decision_engine import DecisionEngine
 from src.contact_moment import find_contact_moment
+from src.head_response import compute_head_response
 
 
 def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True,
@@ -65,6 +66,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
             'graph_path': str,          # Ivme grafigi dosya yolu
             'video_info': dict,         # Video meta bilgileri
             'contact_moment': dict,     # Temas ani (kare, yontem, hedef sporcu)
+            'head_response': dict,      # Bas tepkisi: govdeye gore savrulma ve bas donusu
         }
     """
     # -- Modulleri baslat --
@@ -209,6 +211,13 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
             print(f"  Temas ani: kare {contact_moment['frame']} ({contact_moment['time_sec']:.2f} sn) - "
                   f"{contact_moment['method_tr']}, hedef: {contact_moment['target']}")
 
+    # -- Bas Tepkisi (govdeye gore savrulma, bas donusu) --
+    head_response = compute_head_response(moment_features, info["fps"])
+    if verbose:
+        hr = head_response["max"]
+        print(f"  Bas tepkisi: govdeye gore savrulma {hr['relative_swing']:.1f} px, "
+              f"bas donusu {hr['rotation']:.2f} yaricap")
+
     # -- Temas Ozeti --
     contact_summary = contact_analyzer.analyze_video_contacts(frame_contacts)
 
@@ -284,6 +293,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
         "graph_path": graph_path,
         "video_info": info,
         "contact_moment": contact_moment,
+        "head_response": head_response,
     }
 
 

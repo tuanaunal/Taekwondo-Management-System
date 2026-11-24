@@ -14,6 +14,8 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 
 4. **Başın en yüksek ivmesi ayırt edici değil.** Gürültü giderildikten sonra bile en yüksek ivme Ghost Hit kliplerinde Real Hit'tekinden yüksek (ortanca 13.526'ya karşı 10.615 referans px/sn²). Eski rapordaki "gerçek darbe = keskin ivme tepesi" varsayımı veride doğrulanmıyor; ayırt edici olan, darbe anından sonraki savrulma ve dönüş. *(Adım 13)*
 
+5. **Baş dönüşü en ayırt edici ölçüm; başın gövdeye göre savrulması ise değil.** 20 klipte AUC (rastgele bir Real Hit'in rastgele bir Ghost Hit'ten yüksek değer alma olasılığı; %50 = şans): baş dönüşü %69, burnun mutlak savrulması %67, başın gövdeye göre savrulması %46, en yüksek ivme %41. Ölçümler klibin tamamından alındığı için temas anına odaklanınca (Adım 15) değişebilir; 10'a 10 klipte belirsizlik payı büyüktür. *(Adım 14)*
+
 **Sonuç:** Kararın ana dayanağı **başın darbeye verdiği fiziksel tepki** (dönüş, gövdeye göre savrulma) olmalı; temas geometrisi sadece destekleyici kanıttır.
 
 ---
@@ -38,7 +40,7 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | 11 | Temas anını bulmak (kullanıcı karesi > yaklaşım > baş hareketi) | ✅ | 34 (kısmen) |
 | 12 | Temas ölçümünü kafa yarıçapı ve ayak ucuyla yeniden yazmak *(küçültüldü: temas artık destekleyici kanıt)* | ✅ | 19, 21, 43 (kısmen) |
 | 13 | Hareket verisini doğru yumuşatmak (Savitzky–Golay) | ✅ | 24 |
-| 14 | **Başın gövdeye göre hareketi ve baş dönüşü** *(ana özellik)* | | 25 |
+| 14 | **Başın gövdeye göre hareketi ve baş dönüşü** *(ana özellik)* | ✅ | 25 |
 | 15 | Kinematik analizi temas anına odaklamak | | 26, 27, 28, 29 |
 | 16 | Takip modülünü sadeleştirmek | | 22, 23 |
 | | **4. Aşama – Karar** | | |
