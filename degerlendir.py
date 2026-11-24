@@ -86,11 +86,12 @@ def predicted_contact(decision: str):
     return None
 
 
-def last_history_row() -> dict:
+def last_history_row(scope: str) -> dict:
+    """Aynı kapsamdaki (orijinal / tumu) son çalıştırmanın özetini döner."""
     if not os.path.exists(HISTORY_PATH):
         return {}
     with open(HISTORY_PATH, encoding="utf-8-sig") as f:
-        rows = list(csv.DictReader(f))
+        rows = [r for r in csv.DictReader(f) if r.get("kapsam") == scope]
     return rows[-1] if rows else {}
 
 
@@ -104,7 +105,7 @@ def main():
 
     videos = collect_videos(args.tumu)
     scope = "tumu" if args.tumu else "orijinal"
-    previous = last_history_row()
+    previous = last_history_row(scope)
 
     print("=" * 70)
     print(f"  DEĞERLENDİRME — {len(videos)} video ({scope})")
@@ -180,7 +181,7 @@ def main():
         stable = sum(1 for preds in by_clip.values() if len(preds) == 1)
         print(f"  Tüm kopyalarında aynı kararı alan klip: {stable}/{len(by_clip)}")
 
-    if previous and previous.get("kapsam") == scope:
+    if previous:
         print(f"\n  Önceki çalıştırma ({previous['tarih']}, not: {previous.get('not') or '-'}): "
               f"{previous['dogru']}/{previous['video_sayisi']} (%{float(previous['dogruluk']) * 100:.1f})")
 

@@ -2,18 +2,20 @@
 preprocessor.py — Video Ön-İşleme Pipeline
 ============================================
 Her video karesine sırasıyla uygulanan ön-işleme adımları:
-  1. CLAHE ile ışık dengelemesi
-  2. Gaussian / Median filtreleme ile gürültü temizliği
-  3. Dinamik ROI ile aktif bölge maskelemesi
+  1. Çözünürlük standardizasyonu (1920x1080)
+  2. CLAHE ile ışık dengelemesi
+
+Not: Eskiden YOLO'dan önce Gaussian + Median bulanıklaştırma da yapılıyordu.
+Bulanıklaştırma hızlı tekmelerde ayak bileğinin kaybolmasına yol açtığı ve
+YOLO gürültüye zaten dayanıklı olduğu için kaldırıldı. Kullanılmayan MOG2
+arka plan çıkarma / ROI kodu da kaldırıldı.
 """
 
 import cv2
 import numpy as np
 from src.config import (
     CLAHE_CLIP_LIMIT, CLAHE_TILE_GRID_SIZE,
-    GAUSSIAN_KERNEL_SIZE, MEDIAN_KERNEL_SIZE,
-    MOG2_HISTORY, MOG2_VAR_THRESHOLD, MOG2_DETECT_SHADOWS,
-    ROI_MARGIN, TARGET_FPS, TARGET_WIDTH, TARGET_HEIGHT,
+    TARGET_WIDTH, TARGET_HEIGHT,
 )
 
 
@@ -28,13 +30,6 @@ class VideoPreprocessor:
             clipLimit=CLAHE_CLIP_LIMIT,
             tileGridSize=CLAHE_TILE_GRID_SIZE,
         )
-        # Arka plan çıkarıcı (Dinamik ROI için)
-        self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(
-            history=MOG2_HISTORY,
-            varThreshold=MOG2_VAR_THRESHOLD,
-            detectShadows=MOG2_DETECT_SHADOWS,
-        )
-        self.roi_bbox = None  # Mevcut ROI sınır kutusu
 
     # ────────────────────────────────────
     # ANA İŞLEM
@@ -51,19 +46,16 @@ class VideoPreprocessor:
         Returns
         -------
         np.ndarray
-            İşlenmiş (ışık dengeli, filtrelenmiş) BGR kare.
+            İşlenmiş (ışık dengeli) BGR kare.
         """
         # 1. Çözünürlük standardizasyonu
+        # Not: Temas ve savrulma eşikleri şimdilik piksel cinsinden ve 1080p'ye
+        # göre ayarlı olduğu için bu adım korunuyor. Mesafeler sporcu boyuna
+        # göre ölçeklendiğinde (yol haritası 10. adım) kaldırılacak.
         frame = self._standardize_resolution(frame)
 
         # 2. CLAHE ile ışık dengeleme
         frame = self._apply_clahe(frame)
-
-        # 3. Gaussian Blur
-        frame = cv2.GaussianBlur(frame, GAUSSIAN_KERNEL_SIZE, 0)
-
-        # 4. Median Blur
-        frame = cv2.medianBlur(frame, MEDIAN_KERNEL_SIZE)
 
         return frame
 
@@ -100,59 +92,6 @@ class VideoPreprocessor:
         result = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
         return result
 
-    # ────────────────────────────────────
-    # DİNAMİK ROI — Aktif Bölge Tespiti
-    # ────────────────────────────────────
-    def compute_roi(self, frame: np.ndarray) -> tuple:
-        """
-        Arka plan çıkarma (MOG2) ile aktif mücadele bölgesini tespit eder.
-
-        Returns
-        -------
-        tuple
-            (x, y, w, h) — ROI sınır kutusu. Tespit edilemezse tam kare döner.
-        """
-        fg_mask = self.bg_subtractor.apply(frame)
-
-        # Gürültü temizliği
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
-
-        # Ön plan piksellerinin sınır kutusunu bul
-        coords = cv2.findNonZero(fg_mask)
-        if coords is not None and len(coords) > 100:
-            x, y, w, h = cv2.boundingRect(coords)
-
-            # Marjin ekle
-            img_h, img_w = frame.shape[:2]
-            x = max(0, x - ROI_MARGIN)
-            y = max(0, y - ROI_MARGIN)
-            w = min(img_w - x, w + 2 * ROI_MARGIN)
-            h = min(img_h - y, h + 2 * ROI_MARGIN)
-
-            self.roi_bbox = (x, y, w, h)
-        else:
-            # Tüm kareyi kullan
-            self.roi_bbox = (0, 0, frame.shape[1], frame.shape[0])
-
-        return self.roi_bbox
-
-    def apply_roi(self, frame: np.ndarray) -> np.ndarray:
-        """ROI sınır kutusu içindeki bölgeyi kırpar."""
-        if self.roi_bbox is None:
-            return frame
-        x, y, w, h = self.roi_bbox
-        return frame[y:y + h, x:x + w]
-
-    def reset(self):
-        """Arka plan modelini ve ROI'yi sıfırlar (yeni video için)."""
-        self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(
-            history=MOG2_HISTORY,
-            varThreshold=MOG2_VAR_THRESHOLD,
-            detectShadows=MOG2_DETECT_SHADOWS,
-        )
-        self.roi_bbox = None
 
 
 def load_video(video_path: str) -> cv2.VideoCapture:

@@ -40,9 +40,6 @@ TARGET_HEIGHT = 1080
 CLAHE_CLIP_LIMIT = 2.0
 CLAHE_TILE_GRID_SIZE = (8, 8)
 
-GAUSSIAN_KERNEL_SIZE = (5, 5)
-MEDIAN_KERNEL_SIZE = 5
-
 # ──────────────────────────────────────────────
 # 4. HSV RENK ARALLIKLARI (Taekwondo Ekipmanları)
 # ──────────────────────────────────────────────
@@ -118,18 +115,7 @@ PROXIMITY_THRESHOLD = 80
 CONTOUR_DISTANCE_THRESHOLD = 20
 
 # ──────────────────────────────────────────────
-# 8. ROI (Region of Interest) AYARLARI
-# ──────────────────────────────────────────────
-# Arka plan çıkarma (MOG2) parametreleri
-MOG2_HISTORY = 50
-MOG2_VAR_THRESHOLD = 40
-MOG2_DETECT_SHADOWS = False
-
-# ROI genişletme marjini (piksel)
-ROI_MARGIN = 50
-
-# ──────────────────────────────────────────────
-# 9. GÖRSELLEŞTİRME AYARLARI
+# 8. GÖRSELLEŞTİRME AYARLARI
 # ──────────────────────────────────────────────
 # Renk kodları (BGR formatı, OpenCV için)
 VIS_COLOR_RED = (0, 0, 255)
@@ -143,7 +129,7 @@ VIS_LINE_THICKNESS = 2
 VIS_FONT_SCALE = 0.7
 
 # ──────────────────────────────────────────────
-# 10. KARAR MOTORU AĞIRLIKLARI
+# 9. KARAR MOTORU AĞIRLIKLARI
 # ──────────────────────────────────────────────
 # Nihai karar için bileşen ağırlıkları
 WEIGHT_CONTACT = 0.5        # Temas analizi ağırlığı
