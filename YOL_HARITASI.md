@@ -2,7 +2,7 @@
 
 Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit olarak GitHub'a gönderilir; commit açıklamalarında 52 maddelik inceleme listesinden hangi maddelerin kapandığı yazar. Doğruluk değerleri `python degerlendir.py` ile 20 orijinal klip üzerinde ölçülür (geçmiş: `output/reports/degerlendirme_gecmisi.csv`).
 
-**Başlangıç doğruluğu:** 11/20 · **Güncel:** 13/20
+**Başlangıç doğruluğu:** 11/20 (eşikler test verisine göre ayarlanmıştı) · **Güncel dürüst doğruluk:** %55 (11/20, birini dışarıda bırakarak; `python egit.py`)
 
 ---
 
@@ -15,6 +15,8 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 4. **Başın en yüksek ivmesi ayırt edici değil.** Gürültü giderildikten sonra bile en yüksek ivme Ghost Hit kliplerinde Real Hit'tekinden yüksek (ortanca 13.526'ya karşı 10.615 referans px/sn²). Eski rapordaki "gerçek darbe = keskin ivme tepesi" varsayımı veride doğrulanmıyor; ayırt edici olan, darbe anından sonraki savrulma ve dönüş. *(Adım 13)*
 
 5. **Baş dönüşü en ayırt edici ölçüm; başın gövdeye göre savrulması ise değil.** 20 klipte AUC (rastgele bir Real Hit'in rastgele bir Ghost Hit'ten yüksek değer alma olasılığı; %50 = şans): baş dönüşü %69, burnun mutlak savrulması %67, başın gövdeye göre savrulması %46, en yüksek ivme %41. Ölçümler klibin tamamından alındığı için temas anına odaklanınca (Adım 15) değişebilir; 10'a 10 klipte belirsizlik payı büyüktür. *(Adım 14)*
+
+6. **Dürüst doğruluk şans düzeyine yakın.** Karar modeli her klip (tüm kopyalarıyla) bir kez dışarıda tutularak değerlendirildiğinde: tüm ölçümlerle 11/20 (%55), sadece baş dönüşüyle 10/20, sadece burun savrulmasıyla 11/20. Önceki adımlardaki 11-13/20 sonuçları, eşikleri aynı veriye göre ayarlanmış kararlardan geliyordu. Mevcut ölçümler 20 klipte belirgin bir eğilim gösterse de (AUC %67-69), bu eğilim görülmemiş kliplere genellenecek kadar güçlü değil. En olası nedenler: veri azlığı (10'a 10 klip), otomatik temas anının belirsizliği ve iki boyutlu görüntünün sınırları. *(Adım 17-18)*
 
 **Sonuç:** Kararın ana dayanağı **başın darbeye verdiği fiziksel tepki** (dönüş, gövdeye göre savrulma) olmalı; temas geometrisi sadece destekleyici kanıttır.
 
@@ -44,9 +46,9 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | 15 | Kinematik analizi temas anına odaklamak *(sadece an güvenilirse: kullanıcı karesi / gerçek yaklaşım)* | ✅ | 26, 27, 28, 29 (kısmen) |
 | 16 | Takip modülünü sadeleştirmek *(eski tracker.py kaldırıldı)* | ✅ | 22, 23 |
 | | **4. Aşama – Karar** | | |
-| 17 | Karar motorunu yeni tanıma göre yazmak (temas var / yok / belirsiz × sensör) | | 30, 32, 34 |
-| 18 | Elle yazılmış eşikler yerine yorumlanabilir küçük model + doğru değerlendirme | | 33, 35, 36 |
-| 19 | Gerçek güven değeri ve otomatik gerekçe | | 31 |
+| 17 | Karar motorunu yeni tanıma göre yazmak (temas var / yok / belirsiz × sensör) | ✅ | 30, 32, 34 |
+| 18 | Elle yazılmış eşikler yerine yorumlanabilir küçük model + doğru değerlendirme *(17 ile birlikte)* | ✅ | 33, 35, 36 |
+| 19 | Gerçek güven değeri ve otomatik gerekçe *(olasılık ve gerekçe 17-18'de eklendi; kalan: güvenin kalibrasyonu)* | | 31 (kısmen) |
 | | **5. Aşama – Arayüz ve rapor** | | |
 | 20 | Analizi tek geçişte yapmak | | 39, 40 |
 | 21 | Video ile grafikleri eşzamanlamak | | 41 |

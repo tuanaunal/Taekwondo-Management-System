@@ -141,6 +141,8 @@ def compute_head_response(frame_features: list, fps: float,
         relative = head - torso                 # gövdeye göre baş konumu
         orientation = (nose - head) / r if np.isfinite(r) and r > 0 else np.full_like(nose, np.nan)
 
+        n_frames = len(frame_features)
+        coverage = float(np.count_nonzero(~np.isnan(s["nose"][:, 0]))) / n_frames if n_frames else 0.0
         abs_v, abs_t = _max_window_change(nose, half, centers)
         rel_v, rel_t = _max_window_change(relative, half, centers)
         rot_v, rot_t = _max_window_change(orientation, half, centers)
@@ -148,12 +150,16 @@ def compute_head_response(frame_features: list, fps: float,
             "absolute_swing": abs_v, "absolute_frame": abs_t,
             "relative_swing": rel_v, "relative_frame": rel_t,
             "rotation": rot_v, "rotation_frame": rot_t,
+            "coverage": coverage,  # başın gerçekten ölçüldüğü karelerin oranı
         }
     keys = ("absolute_swing", "relative_swing", "rotation")
     if target in ("red", "blue"):
         result["max"] = {key: result[target][key] for key in keys}
+        result["coverage"] = result[target]["coverage"]
     else:
         result["max"] = {key: max(result["red"][key], result["blue"][key]) for key in keys}
+        # Hedef bilinmiyorsa: iki sporcudan daha iyi ölçülenin kapsaması
+        result["coverage"] = max(result["red"]["coverage"], result["blue"]["coverage"])
     result["anchor_frame"] = anchor_frame
     result["target"] = target
     return result

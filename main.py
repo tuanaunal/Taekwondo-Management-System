@@ -38,7 +38,7 @@ from src.head_response import compute_head_response
 
 
 def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True,
-                  contact_frame: int = None) -> dict:
+                  contact_frame: int = None, sensor_scored: bool = None) -> dict:
     """
     Tek bir video dosyasini uctan uca analiz eder.
 
@@ -53,6 +53,9 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     contact_frame : int, optional
         Kullanicinin (orn. hakemin) isaretledigi, sensorun puan verdigi kare.
         Verilmezse temas ani otomatik bulunur.
+    sensor_scored : bool, optional
+        Sensor puan verdi mi? (True / False). Verilirse karar, goruntu karariyla birlestirilir:
+        Puan Gecerli / Ghost Hit / Kacirilan Vurus / Dogru Karar. Verilmezse sadece goruntu karari.
 
     Returns
     -------
@@ -289,6 +292,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     # -- Nihai Karar --
     decision_result = decision_engine.make_decision(
         contact_summary, kinematic_result,
+        head_response=head_response, sensor_scored=sensor_scored,
     )
 
     if verbose:

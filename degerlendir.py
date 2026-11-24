@@ -37,10 +37,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from main import analyze_video
 from src.config import GHOST_HIT_DIR, REAL_HIT_DIR, REPORTS_DIR
 
-# Karar motorunun (geçici) kategorilerinin "temas var / yok" karşılığı.
-# INCONCLUSIVE (belirsiz) hiçbir sınıfa sayılmaz; her zaman yanlış kabul edilir.
-CONTACT_DECISIONS = {"REAL_HIT", "LIGHT_CONTACT"}
-NO_CONTACT_DECISIONS = {"GHOST_HIT", "EXTERNAL_FACTOR"}
+# Karar kodlarının "temas var / yok" karşılığı (bkz. decision_engine.py).
+# BELIRSIZ hiçbir sınıfa sayılmaz; her zaman yanlış kabul edilir.
+CONTACT_DECISIONS = {"TEMAS_VAR", "PUAN_GECERLI", "KACIRILAN_VURUS"}
+NO_CONTACT_DECISIONS = {"TEMAS_YOK", "GHOST_HIT", "DOGRU_KARAR"}
 
 AUGMENT_TAGS = ["flipped", "bright", "dark", "noisy", "blur"]
 HISTORY_PATH = os.path.join(REPORTS_DIR, "degerlendirme_gecmisi.csv")
@@ -131,7 +131,7 @@ def main():
                 "gerekce": dr.get("reasoning", ""),
             }
         except Exception as e:  # bir videodaki hata tüm testi durdurmasın
-            decision = "INCONCLUSIVE"
+            decision = "BELIRSIZ"
             details = {"gerekce": f"HATA: {e}"}
 
         pred = predicted_contact(decision)
@@ -180,6 +180,17 @@ def main():
                 print(f"    {v:9s} {sum(by_variant[v])}/{len(by_variant[v])}")
         stable = sum(1 for preds in by_clip.values() if len(preds) == 1)
         print(f"  Tüm kopyalarında aynı kararı alan klip: {stable}/{len(by_clip)}")
+
+    # Karar modeli bu veri setiyle eğitildiği için buradaki doğruluk modelin GÖRDÜĞÜ kliplerdedir.
+    # Dürüst (hiç görülmemiş klip) doğruluğu egit.py'nin birini dışarıda bırakarak ölçtüğü değerdir.
+    from src.decision_engine import load_model
+    model = load_model()
+    if model and model.get("dogrulama"):
+        v = model["dogrulama"]
+        print()
+        print("  UYARI: Karar modeli bu videolarla eğitildi; yukarıdaki doğruluk iyimserdir.")
+        print(f"  Dürüst doğruluk (egit.py, {v['yontem']}): "
+              f"orijinal 20 %{v['orijinal_20_dogruluk'] * 100:.0f}, tüm 120 %{v['tum_120_dogruluk'] * 100:.0f}")
 
     if previous:
         print(f"\n  Önceki çalıştırma ({previous['tarih']}, not: {previous.get('not') or '-'}): "

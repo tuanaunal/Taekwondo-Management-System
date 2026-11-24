@@ -133,8 +133,6 @@ VIS_FONT_SCALE = 0.7
 # 9. KARAR MOTORU AĞIRLIKLARI
 # ──────────────────────────────────────────────
 # Nihai karar için bileşen ağırlıkları
-WEIGHT_CONTACT = 0.5        # Temas analizi ağırlığı
-WEIGHT_KINEMATICS = 0.5     # Kinematik analiz ağırlığı
-
-# Güven skoru eşiği
-CONFIDENCE_THRESHOLD = 0.6
+# Not: Eski WEIGHT_CONTACT / WEIGHT_KINEMATICS / CONFIDENCE_THRESHOLD değerleri hiçbir
+# karara katılmıyordu ve kaldırıldı. Karar artık veriden öğrenilen modelle veriliyor
+# (model/karar_modeli.json, eğitim: egit.py).
