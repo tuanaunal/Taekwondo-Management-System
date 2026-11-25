@@ -283,6 +283,10 @@ class MainWindow(QMainWindow):
         self.result_panel = ResultPanel()
         self.result_panel.btn_save_report.clicked.connect(self._save_report)
 
+        # Video <-> grafik/tablo eşzamanlama
+        self.video_player.frame_changed.connect(self.result_panel.set_current_frame)
+        self.result_panel.frame_selected.connect(self.video_player.go_to_frame)
+
         # Splitter'a ekle
         splitter.addWidget(left_panel)
         splitter.addWidget(self.video_player)

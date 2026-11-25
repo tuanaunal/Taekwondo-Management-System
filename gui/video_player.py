@@ -607,6 +607,16 @@ class VideoPlayerWidget(QWidget):
             self.pause()
             self.playback_finished.emit()
 
+    def go_to_frame(self, idx: int):
+        """Videoyu verilen kareye götürür (ör. sonuç tablosundan seçilen kare)."""
+        if 0 <= idx < self.total_frames:
+            self.pause()
+            self.current_frame = idx
+            self.slider.blockSignals(True)
+            self.slider.setValue(idx)
+            self.slider.blockSignals(False)
+            self._display_frame(idx)
+
     def _on_slider_changed(self, value):
         self.current_frame = value
         self._display_frame(value)

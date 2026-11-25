@@ -203,6 +203,8 @@ class KinematicAnalyzer:
             "net_displacement": 0.0,
             "peak_frame": 0,
             "anchor_frame": None,
+            # İvme/hız profillerinin ilk elemanının videodaki kare numarası (grafik ekseni için)
+            "profile_start_frame": int(grid[0]) if len(grid) else 0,
             "type": "stationary",
             "confidence": 0.0,
             "details": "",

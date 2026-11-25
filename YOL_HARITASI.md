@@ -61,7 +61,7 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | 19 | Gerçek güven değeri ve otomatik gerekçe *(güven = benzer kararların dürüst ölçümdeki doğruluğu)* | ✅ | 31 |
 | | **5. Aşama – Arayüz ve rapor** | | |
 | 20 | Analizi tek geçişte yapmak *(işaretler oynatma sırasında çiziliyor; süre ~yarıya indi)* | ✅ | 39, 40 (kısmen), 43 |
-| 21 | Video ile grafikleri eşzamanlamak | | 41 |
+| 21 | Video ile grafikleri eşzamanlamak *(dikey kare çizgisi, seçili tablo satırı, tablodan kareye gitme)* | ✅ | 41 |
 | 22 | Sensör durumu seçimi, temas anını görünür yapmak | | 44 |
 | 23 | Gerçek ilerleme çubuğu | | 42 |
 | 24 | PDF raporu yenilemek | | 43, 49 (kısmen) |
