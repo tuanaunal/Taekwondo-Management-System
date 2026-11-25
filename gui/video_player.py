@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QPoint
 from PyQt5.QtGui import QImage, QPixmap, QCursor
 
+from gui import theme
 from gui.overlay import draw_frame_features
 
 
@@ -151,93 +152,45 @@ class VideoPlayerWidget(QWidget):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(8)
 
-        # ── Video gösterim alanı (Zoomable) ──
+        # ── Video gösterim alanı (yakınlaştırılabilir) ──
         self.video_label = ZoomableVideoLabel()
         self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setStyleSheet("""
-            QLabel {
-                background-color: #1a1a2e;
-                border: 2px solid #16213e;
-                border-radius: 8px;
-                min-height: 450px;
-                color: #8899aa;
-                font-size: 14px;
-            }
-        """)
-        self.video_label.setText("Video yüklemek için 'Dosya Aç' butonunu kullanın")
+        self.video_label.setStyleSheet(
+            f"QLabel {{ background-color: #05070b; border-radius: 10px; min-height: 360px;"
+            f" color: {theme.TEXT_2}; font-size: 14px; }}")
+        self.video_label.setText("Video açmak için soldaki \"Video Aç\" düğmesini kullanın")
         self.video_label.zoom_changed.connect(self._on_zoom_changed)
         layout.addWidget(self.video_label, 1)
 
-        # ── Frame slider ──
+        # ── Kare kaydırıcı ──
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setMinimum(0)
         self.slider.setMaximum(0)
         self.slider.valueChanged.connect(self._on_slider_changed)
-        self.slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                border: 1px solid #333;
-                height: 6px;
-                background: #16213e;
-                border-radius: 3px;
-            }
-            QSlider::handle:horizontal {
-                background: #e94560;
-                border: 2px solid #e94560;
-                width: 16px;
-                margin: -6px 0;
-                border-radius: 8px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #e94560;
-                border-radius: 3px;
-            }
-        """)
-        layout.addWidget(self.slider)
+        slider_row = QHBoxLayout()
+        slider_row.setSpacing(10)
+        slider_row.addWidget(self.slider, 1)
+        slider_row.addWidget(self.frame_info_placeholder())
+        layout.addLayout(slider_row)
 
-        # ── Oynatma Kontrolleri ──
+        # ── Oynatma kontrolleri ──
         controls = QHBoxLayout()
         controls.setSpacing(6)
 
-        self.btn_prev = QPushButton("⏮ Önceki")
-        self.btn_play = QPushButton("▶ Oynat")
-        self.btn_next = QPushButton("Sonraki ⏭")
-        self.btn_overlay = QPushButton("🎨 Overlay")
-        self.frame_info = QLabel("Kare: 0/0")
-
-        btn_style = """
-            QPushButton {
-                background-color: #1a1a2e;
-                color: #e0e0e0;
-                border: 2px solid #0f3460;
-                border-radius: 8px;
-                padding: 10px 18px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #0f3460;
-                border-color: #e94560;
-                color: white;
-            }
-            QPushButton:pressed {
-                background-color: #e94560;
-                border-color: #e94560;
-                color: white;
-            }
-        """
+        self.btn_prev = QPushButton("◀")
+        self.btn_play = QPushButton("Oynat")
+        self.btn_next = QPushButton("▶")
+        self.btn_prev.setToolTip("Önceki kare")
+        self.btn_next.setToolTip("Sonraki kare")
+        self.btn_overlay = QPushButton("İşaretler: Kapalı")
+        self.btn_overlay.setCheckable(True)
+        self.btn_overlay.setToolTip("Baş ve ayak işaretlerini göster / gizle (analizden sonra)")
 
         for btn in [self.btn_prev, self.btn_play, self.btn_next, self.btn_overlay]:
-            btn.setStyleSheet(btn_style)
-
-        self.frame_info.setStyleSheet("""
-            QLabel {
-                color: #8899aa;
-                font-size: 12px;
-                padding: 0 10px;
-            }
-        """)
+            btn.setProperty("variant", "ghost")
+        self.btn_play.setMinimumWidth(110)
 
         self.btn_prev.clicked.connect(self.prev_frame)
         self.btn_play.clicked.connect(self.toggle_play)
@@ -248,118 +201,54 @@ class VideoPlayerWidget(QWidget):
         controls.addWidget(self.btn_play)
         controls.addWidget(self.btn_next)
         controls.addStretch()
-        controls.addWidget(self.btn_overlay)
-        controls.addWidget(self.frame_info)
 
-        layout.addLayout(controls)
-
-        # ── Hız ve Zoom Kontrolleri ──
-        extra_controls = QHBoxLayout()
-        extra_controls.setSpacing(4)
-
-        # Hız kontrolleri
-        speed_label = QLabel("⏩ Hız:")
-        speed_label.setStyleSheet("color: #8899aa; font-size: 11px; font-weight: bold;")
-        extra_controls.addWidget(speed_label)
-
+        # Hız
+        speed_label = QLabel("Hız")
+        speed_label.setProperty("role", "muted")
+        controls.addWidget(speed_label)
         self.speed_buttons = {}
-        speed_btn_style_normal = """
-            QPushButton {
-                background-color: #161b22;
-                color: #8b949e;
-                border: 1px solid #30363d;
-                border-radius: 4px;
-                padding: 5px 10px;
-                font-size: 11px;
-                font-weight: bold;
-                min-width: 42px;
-            }
-            QPushButton:hover {
-                background-color: #21262d;
-                border-color: #58a6ff;
-                color: #c9d1d9;
-            }
-        """
-        speed_btn_style_active = """
-            QPushButton {
-                background-color: #1f6feb;
-                color: white;
-                border: 1px solid #58a6ff;
-                border-radius: 4px;
-                padding: 5px 10px;
-                font-size: 11px;
-                font-weight: bold;
-                min-width: 42px;
-            }
-        """
-
-        for spd in [0.25, 0.5, 1.0, 2.0, 4.0]:
-            label = f"{spd}x"
-            btn = QPushButton(label)
-            btn.setStyleSheet(speed_btn_style_active if spd == 1.0 else speed_btn_style_normal)
+        self.speed_group = QButtonGroup(self)
+        self.speed_group.setExclusive(True)
+        for spd in [0.25, 0.5, 1.0, 2.0]:
+            btn = QPushButton(f"{spd:g}×")
+            btn.setProperty("variant", "ghost")
+            btn.setCheckable(True)
+            btn.setChecked(spd == 1.0)
             btn.clicked.connect(lambda checked, s=spd: self._set_speed(s))
-            btn.setProperty("speed_value", spd)
+            self.speed_group.addButton(btn)
             self.speed_buttons[spd] = btn
-            extra_controls.addWidget(btn)
+            controls.addWidget(btn)
 
-        # Ayırıcı
-        separator = QFrame()
-        separator.setFrameShape(QFrame.VLine)
-        separator.setStyleSheet("color: #30363d;")
-        extra_controls.addWidget(separator)
+        controls.addSpacing(10)
 
-        # Zoom kontrolleri
-        zoom_label = QLabel("🔍 Zoom:")
-        zoom_label.setStyleSheet("color: #8899aa; font-size: 11px; font-weight: bold;")
-        extra_controls.addWidget(zoom_label)
-
-        zoom_btn_style = """
-            QPushButton {
-                background-color: #161b22;
-                color: #c9d1d9;
-                border: 1px solid #30363d;
-                border-radius: 4px;
-                padding: 5px 10px;
-                font-size: 12px;
-                font-weight: bold;
-                min-width: 32px;
-            }
-            QPushButton:hover {
-                background-color: #21262d;
-                border-color: #e94560;
-                color: #e94560;
-            }
-            QPushButton:pressed {
-                background-color: #e94560;
-                color: white;
-            }
-        """
-
+        # Yakınlaştırma
         self.btn_zoom_out = QPushButton("−")
-        self.btn_zoom_reset = QPushButton("1.0x")
+        self.btn_zoom_reset = QPushButton("1.0×")
         self.btn_zoom_in = QPushButton("+")
-
+        self.btn_zoom_out.setToolTip("Uzaklaştır")
+        self.btn_zoom_reset.setToolTip("Yakınlaştırmayı sıfırla")
+        self.btn_zoom_in.setToolTip("Yakınlaştır")
         for btn in [self.btn_zoom_out, self.btn_zoom_reset, self.btn_zoom_in]:
-            btn.setStyleSheet(zoom_btn_style)
-
-        self.btn_zoom_reset.setStyleSheet(zoom_btn_style + """
-            QPushButton {
-                min-width: 48px;
-                color: #e94560;
-            }
-        """)
-
+            btn.setProperty("variant", "ghost")
         self.btn_zoom_out.clicked.connect(self.video_label.zoom_out)
         self.btn_zoom_reset.clicked.connect(self.video_label.reset_zoom)
         self.btn_zoom_in.clicked.connect(self.video_label.zoom_in)
+        controls.addWidget(self.btn_zoom_out)
+        controls.addWidget(self.btn_zoom_reset)
+        controls.addWidget(self.btn_zoom_in)
 
-        extra_controls.addWidget(self.btn_zoom_out)
-        extra_controls.addWidget(self.btn_zoom_reset)
-        extra_controls.addWidget(self.btn_zoom_in)
+        controls.addSpacing(10)
+        controls.addWidget(self.btn_overlay)
 
-        extra_controls.addStretch()
+        layout.addLayout(controls)
 
-        layout.addLayout(extra_controls)
+    def frame_info_placeholder(self) -> QLabel:
+        """Kaydırıcının sağındaki kare / zaman bilgisi."""
+        self.frame_info = QLabel("Kare 0 / 0")
+        self.frame_info.setMinimumWidth(230)
+        self.frame_info.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.frame_info.setStyleSheet(f"color: {theme.TEXT_2}; font-size: 12px;")
+        return self.frame_info
 
     def _setup_timer(self):
         self.timer = QTimer()
@@ -371,40 +260,9 @@ class VideoPlayerWidget(QWidget):
     def _set_speed(self, speed: float):
         """Oynatma hızını ayarlar."""
         self.speed = speed
-
-        # Buton stillerini güncelle
-        speed_btn_style_normal = """
-            QPushButton {
-                background-color: #161b22;
-                color: #8b949e;
-                border: 1px solid #30363d;
-                border-radius: 4px;
-                padding: 5px 10px;
-                font-size: 11px;
-                font-weight: bold;
-                min-width: 42px;
-            }
-            QPushButton:hover {
-                background-color: #21262d;
-                border-color: #58a6ff;
-                color: #c9d1d9;
-            }
-        """
-        speed_btn_style_active = """
-            QPushButton {
-                background-color: #1f6feb;
-                color: white;
-                border: 1px solid #58a6ff;
-                border-radius: 4px;
-                padding: 5px 10px;
-                font-size: 11px;
-                font-weight: bold;
-                min-width: 42px;
-            }
-        """
-
-        for spd, btn in self.speed_buttons.items():
-            btn.setStyleSheet(speed_btn_style_active if spd == speed else speed_btn_style_normal)
+        btn = self.speed_buttons.get(speed)
+        if btn is not None and not btn.isChecked():
+            btn.setChecked(True)
 
         # Eğer oynatılıyorsa timer'ı güncelle
         if self.playing:
@@ -417,7 +275,7 @@ class VideoPlayerWidget(QWidget):
     # ────────────────────────────────────
     def _on_zoom_changed(self, zoom_level: float):
         """Zoom seviyesi değiştiğinde UI günceller ve kareyi yeniden çizer."""
-        self.btn_zoom_reset.setText(f"{zoom_level:.1f}x")
+        self.btn_zoom_reset.setText(f"{zoom_level:.1f}×")
         self._display_frame(self.current_frame)
 
     # ────────────────────────────────────
@@ -479,13 +337,13 @@ class VideoPlayerWidget(QWidget):
             self._display_frame(0)
             self.slider.setValue(0)
         self.playing = True
-        self.btn_play.setText("⏸ Durdur")
+        self.btn_play.setText("Duraklat")
         interval = max(1, int(1000 / self.fps / self.speed))
         self.timer.start(interval)
 
     def pause(self):
         self.playing = False
-        self.btn_play.setText("▶ Oynat")
+        self.btn_play.setText("Oynat")
         self.timer.stop()
 
     def stop(self):
@@ -515,11 +373,13 @@ class VideoPlayerWidget(QWidget):
             self.slider.blockSignals(False)
 
     def toggle_overlay(self):
-        self.show_overlay = not self.show_overlay
-        if self.show_overlay:
-            self.btn_overlay.setText("🎨 Overlay: AÇIK")
-        else:
-            self.btn_overlay.setText("🎨 Overlay: KAPALI")
+        self.set_overlay(not self.show_overlay)
+
+    def set_overlay(self, on: bool):
+        """Baş ve ayak işaretlerini açar / kapatır."""
+        self.show_overlay = bool(on)
+        self.btn_overlay.setChecked(self.show_overlay)
+        self.btn_overlay.setText("İşaretler: Açık" if self.show_overlay else "İşaretler: Kapalı")
         self._display_frame(self.current_frame)
 
     # ────────────────────────────────────
@@ -588,11 +448,10 @@ class VideoPlayerWidget(QWidget):
 
         # Bilgi güncelle
         time_sec = idx / self.fps if self.fps > 0 else 0
-        speed_text = f" | Hız: {self.speed}x" if self.speed != 1.0 else ""
-        zoom_text = f" | Zoom: {self.video_label.zoom_level:.1f}x" if self.video_label.zoom_level > 1.0 else ""
+        # Kare numarası, tablo/grafik/işaretleme ile aynı (0'dan başlar)
+        marker = "   ●  temas anı" if idx == self.highlight_frame and self.frame_features else ""
         self.frame_info.setText(
-            f"Kare: {idx + 1}/{self.total_frames} | "
-            f"Zaman: {time_sec:.2f}s{speed_text}{zoom_text}"
+            f"Kare {idx} / {self.total_frames - 1}   ·   {time_sec:.2f} sn{marker}"
         )
         self.frame_changed.emit(idx)
 

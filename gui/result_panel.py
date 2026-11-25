@@ -1,7 +1,7 @@
 """
 result_panel.py — Analiz Sonuç Paneli
 =======================================
-Karar göstergesi, ivme-zaman grafiği, temas mesafesi grafiği
+Karar kartı, ivme-zaman grafiği, temas mesafesi grafiği
 ve detaylı log tablosu içeren sonuç paneli.
 """
 
@@ -16,12 +16,14 @@ from matplotlib.figure import Figure
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QTableWidget, QTableWidgetItem, QPushButton,
-    QHeaderView, QFrame, QScrollArea, QGroupBox,
+    QHeaderView, QFrame, QScrollArea, QGroupBox, QSizePolicy, QTabWidget,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QColor
 
 from src.config import REPORTS_DIR
+from gui import theme
+from gui.decision_card import DecisionCard
 
 
 class ResultPanel(QWidget):
@@ -43,154 +45,44 @@ class ResultPanel(QWidget):
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(10)
 
-        # ── Karar Göstergesi ──
-        self.decision_box = QGroupBox("KARAR")
-        self.decision_box.setStyleSheet("""
-            QGroupBox {
-                font-size: 13px;
-                font-weight: bold;
-                color: #e94560;
-                border: 2px solid #16213e;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 8px;
-            }
-        """)
-        dec_layout = QVBoxLayout(self.decision_box)
+        # ── Karar kartı (her zaman tam boyutunda görünür) ──
+        self.decision_card = DecisionCard()
+        self.decision_card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        main_layout.addWidget(self.decision_card, 0)
 
-        self.decision_label = QLabel("Analiz bekleniyor...")
-        self.decision_label.setAlignment(Qt.AlignCenter)
-        self.decision_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
-        self.decision_label.setStyleSheet("color: #8899aa; padding: 15px; background-color: #16213e; border-radius: 8px;")
-        dec_layout.addWidget(self.decision_label)
+        # ── Ayrıntılar: grafikler ve kare tablosu sekmelerde (dikey yer kazanmak için) ──
+        self.tabs = QTabWidget()
 
-        self.confidence_label = QLabel("")
-        self.confidence_label.setAlignment(Qt.AlignCenter)
-        self.confidence_label.setFont(QFont("Segoe UI", 11))
-        self.confidence_label.setStyleSheet("color: #8899aa;")
-        dec_layout.addWidget(self.confidence_label)
-
-        self.reasoning_label = QLabel("")
-        self.reasoning_label.setWordWrap(True)
-        self.reasoning_label.setStyleSheet("""
-            color: #aabbcc;
-            font-size: 11px;
-            padding: 5px 10px;
-            background-color: #0a0a1a;
-            border-radius: 4px;
-        """)
-        dec_layout.addWidget(self.reasoning_label)
-
-        main_layout.addWidget(self.decision_box)
-
-        # ── Grafikler ──
-        self.graphs_box = QGroupBox("GRAFİKLER")
-        self.graphs_box.setStyleSheet("""
-            QGroupBox {
-                font-size: 12px;
-                font-weight: bold;
-                color: #0f3460;
-                border: 2px solid #16213e;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 8px;
-            }
-        """)
-        graph_layout = QVBoxLayout(self.graphs_box)
-
-        # Matplotlib canvas (ivme grafiği)
+        graphs_page = QWidget()
+        graph_layout = QVBoxLayout(graphs_page)
+        graph_layout.setContentsMargins(6, 6, 6, 6)
         self.figure = Figure(figsize=(5, 4), dpi=80)
-        self.figure.set_facecolor("#0d1117")
+        self.figure.set_facecolor(theme.SURFACE)
         self.canvas = FigureCanvas(self.figure)
-        self.canvas.setMinimumHeight(250)
+        self.canvas.setMinimumHeight(160)
         graph_layout.addWidget(self.canvas)
+        self.tabs.addTab(graphs_page, "Grafikler")
 
-        main_layout.addWidget(self.graphs_box)
-
-        # ── Detay Tablosu ──
-        self.table_box = QGroupBox("KARE BAZLI LOG")
-        self.table_box.setStyleSheet("""
-            QGroupBox {
-                font-size: 12px;
-                font-weight: bold;
-                color: #0f3460;
-                border: 2px solid #16213e;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 8px;
-            }
-        """)
-        table_layout = QVBoxLayout(self.table_box)
-
+        table_page = QWidget()
+        table_layout = QVBoxLayout(table_page)
+        table_layout.setContentsMargins(6, 6, 6, 6)
         self.table = QTableWidget()
-        self.table.setStyleSheet("""
-            QTableWidget {
-                background-color: #0d1117;
-                color: #c9d1d9;
-                gridline-color: #21262d;
-                border: none;
-                font-size: 11px;
-            }
-            QTableWidget::item {
-                padding: 4px;
-            }
-            QTableWidget::item:selected {
-                background-color: #1f6feb;
-            }
-            QHeaderView::section {
-                background-color: #161b22;
-                color: #58a6ff;
-                padding: 6px;
-                border: 1px solid #21262d;
-                font-weight: bold;
-                font-size: 11px;
-            }
-        """)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.cellClicked.connect(self._on_table_clicked)
         table_layout.addWidget(self.table)
+        self.tabs.addTab(table_page, "Kare tablosu")
+
+        main_layout.addWidget(self.tabs, 1)
 
         # Rapor kaydet butonu
-        self.btn_save_report = QPushButton("📄 Rapor Kaydet")
-        self.btn_save_report.setStyleSheet("""
-            QPushButton {
-                background-color: #238636;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 20px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2ea043;
-            }
-            QPushButton:pressed {
-                background-color: #1a7f37;
-            }
-        """)
-        table_layout.addWidget(self.btn_save_report)
-
-        main_layout.addWidget(self.table_box)
+        self.btn_save_report = QPushButton("📄  PDF Rapor Kaydet")
+        self.btn_save_report.setProperty("variant", "secondary")
+        self.btn_save_report.setEnabled(False)
+        main_layout.addWidget(self.btn_save_report)
 
     # ────────────────────────────────────
     # SONUÇLARI GÖSTER
@@ -210,21 +102,8 @@ class ResultPanel(QWidget):
         frame_log = analysis_result.get("frame_log", [])
 
         # ── Karar ──
-        indicator = decision.get("indicator", "❓")
-        label_tr = decision.get("label_tr", "Belirsiz")
-        color = decision.get("color", "#95A5A6")
-        confidence = decision.get("confidence", 0)
-        reasoning = decision.get("reasoning", "")
-
-        self.decision_label.setText(f"{indicator}  {label_tr}")
-        self.decision_label.setStyleSheet(
-            f"color: {color}; padding: 15px; font-size: 26px; font-weight: 900; background-color: {color}15; border-radius: 8px; border: 1px solid {color}30;"
-        )
-        level = decision.get("confidence_level", "")
-        level_txt = f" ({level})" if level and level != "-" else ""
-        self.confidence_label.setText(f"Güven: {confidence:.1%}{level_txt}")
-        self.confidence_label.setStyleSheet(f"color: {color};")
-        self.reasoning_label.setText(reasoning)
+        self.decision_card.display(decision)
+        self.btn_save_report.setEnabled(True)
 
         # ── Grafik ──
         self._plot_analysis(contact, kinematic)
@@ -241,7 +120,7 @@ class ResultPanel(QWidget):
 
         # Stil
         for ax in [ax1, ax2]:
-            ax.set_facecolor("#0d1117")
+            ax.set_facecolor(theme.SURFACE)
             ax.tick_params(colors="#8b949e", labelsize=8)
             ax.spines["bottom"].set_color("#30363d")
             ax.spines["top"].set_visible(False)
@@ -362,10 +241,8 @@ class ResultPanel(QWidget):
         """Paneli temizler."""
         self._frame_lines = []
         self._row_for_frame = {}
-        self.decision_label.setText("Analiz bekleniyor...")
-        self.decision_label.setStyleSheet("color: #8899aa; padding: 15px; background-color: #16213e; border-radius: 8px;")
-        self.confidence_label.setText("")
-        self.reasoning_label.setText("")
+        self.decision_card.clear()
+        self.btn_save_report.setEnabled(False)
         self.figure.clear()
         self.canvas.draw()
         self.table.setRowCount(0)

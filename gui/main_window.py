@@ -1,5 +1,5 @@
 """
-main_window.py — Taekwondo Ghost Hit Detection: Ana Pencere
+main_window.py — Hakem Karar Destek Sistemi: Ana Pencere
 =============================================================
 Profesyonel masaüstü hakem kontrol paneli.
 
@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFileDialog, QListWidget,
     QListWidgetItem, QSplitter, QGroupBox, QProgressBar,
-    QMessageBox, QStatusBar, QApplication, QComboBox,
+    QMessageBox, QStatusBar, QApplication, QComboBox, QFrame,
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt5.QtGui import QFont, QIcon, QColor
@@ -36,6 +36,7 @@ if project_root not in sys.path:
 from gui.video_player import VideoPlayerWidget
 from gui.result_panel import ResultPanel
 from src.config import GRAPHS_DIR, REPORTS_DIR
+from gui import theme
 
 
 class AnalysisWorker(QThread):
@@ -74,285 +75,210 @@ class AnalysisWorker(QThread):
 
 class MainWindow(QMainWindow):
     """
-    Taekwondo Ghost Hit Detection — Ana Uygulama Penceresi.
+    Hakem Karar Destek Sistemi — Ana Uygulama Penceresi.
     """
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("🥋 Taekwondo Ghost Hit Detection — Hakem Karar Destek Sistemi")
+        self.setWindowTitle("Taekwondo Hakem Karar Destek Sistemi")
         self.setMinimumSize(1280, 720)
         self.resize(1440, 900)
 
         self.current_video_path = None
         self.worker = None
 
-        self._setup_style()
+        self.setStyleSheet(theme.APP_STYLESHEET)
         self._setup_ui()
         self._setup_statusbar()
 
-    def _setup_style(self):
-        """Uygulama geneli koyu tema stili."""
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #0d1117;
-            }
-            QWidget {
-                background-color: #0d1117;
-                color: #c9d1d9;
-                font-family: 'Segoe UI', 'Arial', sans-serif;
-            }
-            QGroupBox {
-                font-size: 13px;
-                font-weight: bold;
-                color: #58a6ff;
-                border: 2px solid #30363d;
-                border-radius: 10px;
-                margin-top: 12px;
-                padding-top: 20px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 8px;
-            }
-            QSplitter::handle {
-                background-color: #21262d;
-                width: 3px;
-            }
-            QScrollBar:vertical {
-                background-color: #0d1117;
-                width: 10px;
-                border: none;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #30363d;
-                border-radius: 5px;
-                min-height: 20px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """)
+    # ────────────────────────────────────
+    # ARAYÜZ
+    # ────────────────────────────────────
+    @staticmethod
+    def _card(title: str, step: str = None, hint: str = None):
+        """Başlıklı kart çerçevesi döndürür: (kart, içerik düzeni)."""
+        card = QFrame()
+        card.setObjectName("card")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(14, 12, 14, 14)
+        layout.setSpacing(8)
+        head = QHBoxLayout()
+        head.setSpacing(8)
+        if step:
+            badge = QLabel(step)
+            badge.setProperty("role", "step")
+            badge.setAlignment(Qt.AlignCenter)
+            head.addWidget(badge)
+        title_lbl = QLabel(title)
+        title_lbl.setProperty("role", "section")
+        head.addWidget(title_lbl)
+        head.addStretch()
+        if hint:
+            hint_lbl = QLabel(hint)
+            hint_lbl.setProperty("role", "muted")
+            head.addWidget(hint_lbl)
+        layout.addLayout(head)
+        return card, layout
 
-    def _setup_ui(self):
-        central = QWidget()
-        self.setCentralWidget(central)
-        main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(8)
+    def _build_header(self) -> QHBoxLayout:
+        bar = QHBoxLayout()
+        bar.setContentsMargins(6, 2, 6, 4)
+        bar.setSpacing(12)
 
-        # ── Başlık ──
-        title_bar = QHBoxLayout()
-        title_label = QLabel("🥋 TAEKWONDO GHOST HIT DETECTION")
-        title_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
-        title_label.setStyleSheet("color: #e94560; padding: 5px;")
-        title_bar.addWidget(title_label)
+        emblem = QLabel("TKD")
+        emblem.setAlignment(Qt.AlignCenter)
+        emblem.setFixedSize(44, 44)
+        emblem.setStyleSheet(
+            f"background-color: {theme.rgba(theme.BRAND_RED, 0.18)}; border: 1px solid "
+            f"{theme.rgba(theme.BRAND_RED, 0.5)}; border-radius: 12px; font-size: 13px; font-weight: 800;"
+            f" color: {theme.BRAND_RED}; letter-spacing: 1px;")
+        bar.addWidget(emblem)
 
-        subtitle = QLabel("Bilgisayarlı Görü ve Kinematik Analiz ile Dijital Karar Destek Sistemi")
-        subtitle.setStyleSheet("color: #8b949e; font-size: 11px; padding-top: 8px;")
-        title_bar.addWidget(subtitle)
-        title_bar.addStretch()
+        titles = QVBoxLayout()
+        titles.setSpacing(0)
+        overline = QLabel("TAEKWONDO  ·  BİLGİSAYARLI GÖRÜ")
+        overline.setStyleSheet(f"color: {theme.BRAND_RED}; font-size: 10px; font-weight: 700; letter-spacing: 2px;")
+        title = QLabel("Hakem Karar Destek Sistemi")
+        title.setStyleSheet(f"color: {theme.TEXT}; font-size: 22px; font-weight: 800;")
+        subtitle = QLabel("Kafa vuruşlarında elektronik puanlama hatalarının (Ghost Hit, kaçırılan vuruş) görüntüden tespiti")
+        subtitle.setProperty("role", "muted")
+        titles.addWidget(overline)
+        titles.addWidget(title)
+        titles.addWidget(subtitle)
+        bar.addLayout(titles)
+        bar.addStretch()
 
-        main_layout.addLayout(title_bar)
+        # Dürüst doğruluk rozeti: model dosyasındaki doğrulama sonucu
+        acc = self._honest_accuracy()
+        if acc is not None:
+            chip = QLabel(f"Görülmemiş kliplerde doğruluk  %{acc * 100:.0f}")
+            chip.setToolTip("Her klip tüm kopyalarıyla bir kez dışarıda tutularak ölçüldü "
+                            "(birini dışarıda bırakarak doğrulama, 20 klip). Ayrıntı: SONUC_RAPORU.md")
+            chip.setStyleSheet(
+                f"background-color: {theme.SURFACE}; border: 1px solid {theme.BORDER}; border-radius: 14px;"
+                f" padding: 6px 14px; color: {theme.TEXT_2}; font-size: 11px; font-weight: 600;")
+            bar.addWidget(chip, 0, Qt.AlignVCenter)
+        return bar
 
-        # ── Splitter (3 Panel) ──
-        splitter = QSplitter(Qt.Horizontal)
+    @staticmethod
+    def _honest_accuracy():
+        try:
+            from src.decision_engine import load_model
+            model = load_model()
+            return model.get("dogrulama", {}).get("orijinal_20_dogruluk") if model else None
+        except Exception:
+            return None
 
-        # ────────── SOL PANEL (Sadeleştirilmiş) ──────────
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+    def _build_left_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
 
-        # Dosya Aç butonu
-        self.btn_open = QPushButton("📂  Video Dosyası Aç")
-        self.btn_open.setStyleSheet("""
-            QPushButton {
-                background-color: #238636;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 20px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2ea043;
-            }
-            QPushButton:pressed {
-                background-color: #1a7f37;
-            }
-        """)
+        # ── 1. Video ──
+        card, c = self._card("VİDEO", step="1")
+        self.btn_open = QPushButton("📂  Video Aç")
+        self.btn_open.setProperty("variant", "secondary")
         self.btn_open.clicked.connect(self._open_file)
-        left_layout.addWidget(self.btn_open)
+        c.addWidget(self.btn_open)
+        self.file_label = QLabel("Henüz video seçilmedi")
+        self.file_label.setStyleSheet(f"color: {theme.TEXT}; font-weight: 600;")
+        self.file_label.setWordWrap(True)
+        c.addWidget(self.file_label)
+        self.meta_label = QLabel("")
+        self.meta_label.setProperty("role", "muted")
+        self.meta_label.setWordWrap(True)
+        c.addWidget(self.meta_label)
+        layout.addWidget(card)
 
-        # Analiz butonu
-        self.btn_analyze = QPushButton("🔬  Analizi Başlat")
-        self.btn_analyze.setEnabled(False)
-        self.btn_analyze.setStyleSheet("""
-            QPushButton {
-                background-color: #1f6feb;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 20px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #388bfd;
-            }
-            QPushButton:pressed {
-                background-color: #1158c7;
-            }
-            QPushButton:disabled {
-                background-color: #21262d;
-                color: #484f58;
-            }
-        """)
-        self.btn_analyze.clicked.connect(self._start_analysis)
-        left_layout.addWidget(self.btn_analyze)
-
-        # İlerleme çubuğu
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 2px solid #21262d;
-                border-radius: 6px;
-                background-color: #161b22;
-                text-align: center;
-                color: #c9d1d9;
-                font-size: 11px;
-                height: 22px;
-            }
-            QProgressBar::chunk {
-                background-color: #1f6feb;
-                border-radius: 4px;
-            }
-        """)
-        left_layout.addWidget(self.progress_bar)
-
-        # ── Hakem girdileri: sensör durumu ve temas anı ──
-        referee_box = QGroupBox("HAKEM GİRDİLERİ")
-        referee_layout = QVBoxLayout(referee_box)
-
+        # ── 2. Hakem girdileri ──
+        card, c = self._card("HAKEM GİRDİLERİ", step="2", hint="isteğe bağlı")
         sensor_label = QLabel("Sensör puan verdi mi?")
-        sensor_label.setStyleSheet("color: #8b949e; font-size: 11px;")
-        referee_layout.addWidget(sensor_label)
+        sensor_label.setProperty("role", "muted")
+        c.addWidget(sensor_label)
         self.sensor_combo = QComboBox()
         # (görünen metin, analize giden değer)
         self._sensor_options = [("Bilinmiyor", None), ("Puan verdi", True), ("Puan vermedi", False)]
         for text, _ in self._sensor_options:
             self.sensor_combo.addItem(text)
-        self.sensor_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #161b22; color: #c9d1d9;
-                border: 1px solid #30363d; border-radius: 6px; padding: 5px 8px; font-size: 12px;
-            }
-            QComboBox QAbstractItemView { background-color: #161b22; color: #c9d1d9; }
-        """)
         self.sensor_combo.currentIndexChanged.connect(self._on_sensor_changed)
-        referee_layout.addWidget(self.sensor_combo)
+        c.addWidget(self.sensor_combo)
 
-        moment_label = QLabel("Temas anı (videoyu durdurup işaretleyin):")
+        moment_label = QLabel("Temas anı — videoyu durdurup işaretleyin:")
+        moment_label.setProperty("role", "muted")
         moment_label.setWordWrap(True)
-        moment_label.setStyleSheet("color: #8b949e; font-size: 11px; padding-top: 6px;")
-        referee_layout.addWidget(moment_label)
-        self.btn_mark = QPushButton("📍  Bu kareyi işaretle")
-        self.btn_mark.setStyleSheet("""
-            QPushButton {
-                background-color: #21262d;
-                color: #c9d1d9;
-                border: 1px solid #30363d;
-                border-radius: 6px;
-                padding: 7px 10px;
-                font-size: 12px;
-            }
-            QPushButton:hover { background-color: #30363d; }
-            QPushButton:disabled { color: #484f58; }
-        """)
+        c.addSpacing(4)
+        c.addWidget(moment_label)
+        mark_row = QHBoxLayout()
+        mark_row.setSpacing(6)
+        self.btn_mark = QPushButton("📍  İşaretle")
         self.btn_mark.setEnabled(False)
         self.btn_mark.clicked.connect(self._mark_current_frame)
-        referee_layout.addWidget(self.btn_mark)
         self.btn_clear_marks = QPushButton("Temizle")
-        self.btn_clear_marks.setStyleSheet("""
-            QPushButton {
-                background-color: #21262d;
-                color: #c9d1d9;
-                border: 1px solid #30363d;
-                border-radius: 6px;
-                padding: 7px 10px;
-                font-size: 12px;
-            }
-            QPushButton:hover { background-color: #30363d; }
-            QPushButton:disabled { color: #484f58; }
-        """)
         self.btn_clear_marks.setEnabled(False)
         self.btn_clear_marks.clicked.connect(self._clear_marks)
-        referee_layout.addWidget(self.btn_clear_marks)
+        mark_row.addWidget(self.btn_mark, 1)
+        mark_row.addWidget(self.btn_clear_marks)
+        c.addLayout(mark_row)
         self.marks_label = QLabel("İşaretli kare yok (an otomatik bulunur)")
+        self.marks_label.setProperty("role", "muted")
         self.marks_label.setWordWrap(True)
-        self.marks_label.setStyleSheet("color: #c9d1d9; font-size: 11px;")
-        referee_layout.addWidget(self.marks_label)
-        left_layout.addWidget(referee_box)
+        c.addWidget(self.marks_label)
+        layout.addWidget(card)
         self.marked_frames = []
 
-        # Video bilgi paneli
-        info_box = QGroupBox("VIDEO BİLGİLERİ")
-        info_layout = QVBoxLayout(info_box)
-        self.info_labels = {}
-        for key, label in [
-            ("filename", "Dosya:"),
-            ("resolution", "Çözünürlük:"),
-            ("fps", "FPS:"),
-            ("frames", "Kare Sayısı:"),
-            ("duration", "Süre:"),
-        ]:
-            row = QHBoxLayout()
-            lbl = QLabel(label)
-            lbl.setStyleSheet("color: #8b949e; font-size: 11px; min-width: 80px;")
-            val = QLabel("—")
-            val.setStyleSheet("color: #c9d1d9; font-size: 11px;")
-            self.info_labels[key] = val
-            row.addWidget(lbl)
-            row.addWidget(val, 1)
-            info_layout.addLayout(row)
-        left_layout.addWidget(info_box)
+        # ── 3. Analiz ──
+        card, c = self._card("ANALİZ", step="3")
+        self.btn_analyze = QPushButton("▶  Analizi Başlat")
+        self.btn_analyze.setProperty("variant", "primary")
+        self.btn_analyze.setEnabled(False)
+        self.btn_analyze.clicked.connect(self._start_analysis)
+        c.addWidget(self.btn_analyze)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        c.addWidget(self.progress_bar)
+        self.progress_label = QLabel("")
+        self.progress_label.setProperty("role", "muted")
+        self.progress_label.setVisible(False)
+        c.addWidget(self.progress_label)
+        layout.addWidget(card)
 
-        # Kullanım kılavuzu
-        guide_box = QGroupBox("KULLANIM")
-        guide_layout = QVBoxLayout(guide_box)
-        guide_text = QLabel(
-            "1. Video dosyasını açın\n"
-            "2. Videoyu izleyip inceleyin\n"
-            "   • Zoom: Mouse tekerleği\n"
-            "   • Pan: Sürükle (zoom'da)\n"
-            "   • Hız: Alt kontroller\n"
-            "3. (İsteğe bağlı) Sensör durumunu seçin,\n"
-            "   temas anı karelerini işaretleyin\n"
-            "4. Analizi başlatın\n"
-            "5. Sonuçları inceleyin: grafik/tablo\n"
-            "   videoyla birlikte ilerler"
-        )
-        guide_text.setWordWrap(True)
-        guide_text.setStyleSheet("""
-            color: #8b949e;
-            font-size: 11px;
-            padding: 5px;
-            line-height: 1.4;
-        """)
-        guide_layout.addWidget(guide_text)
-        left_layout.addWidget(guide_box)
+        layout.addStretch()
 
-        # Alt boşluk — sol paneli yukarı topla
-        left_layout.addStretch()
+        tips = QLabel("İpucu: fare tekerleğiyle yakınlaştırın, sürükleyerek kaydırın. "
+                      "Grafikte veya tabloda bir kareye tıklayınca video o kareye gider.")
+        tips.setWordWrap(True)
+        tips.setStyleSheet(f"color: {theme.MUTED}; font-size: 11px; padding: 0 4px;")
+        layout.addWidget(tips)
 
-        left_panel.setMaximumWidth(280)
+        panel.setMinimumWidth(250)
+        panel.setMaximumWidth(300)
+        return panel
 
-        # ────────── ORTA PANEL (Video — Büyütülmüş) ──────────
+    def _setup_ui(self):
+        central = QWidget()
+        central.setObjectName("central")
+        self.setCentralWidget(central)
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(12, 10, 12, 8)
+        main_layout.setSpacing(10)
+
+        main_layout.addLayout(self._build_header())
+
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setHandleWidth(10)
+
+        left_panel = self._build_left_panel()
+
+        # ── Orta: video ──
+        video_card = QFrame()
+        video_card.setObjectName("card")
+        vc = QVBoxLayout(video_card)
+        vc.setContentsMargins(10, 10, 10, 10)
         self.video_player = VideoPlayerWidget()
+        vc.addWidget(self.video_player)
 
-        # ────────── SAĞ PANEL ──────────
+        # ── Sağ: sonuçlar ──
         self.result_panel = ResultPanel()
         self.result_panel.btn_save_report.clicked.connect(self._save_report)
 
@@ -360,29 +286,18 @@ class MainWindow(QMainWindow):
         self.video_player.frame_changed.connect(self.result_panel.set_current_frame)
         self.result_panel.frame_selected.connect(self.video_player.go_to_frame)
 
-        # Splitter'a ekle
         splitter.addWidget(left_panel)
-        splitter.addWidget(self.video_player)
+        splitter.addWidget(video_card)
         splitter.addWidget(self.result_panel)
-
-        # Oranlar: Sol %15, Orta %50, Sağ %35
-        splitter.setSizes([220, 720, 500])
+        splitter.setSizes([270, 700, 470])
+        splitter.setStretchFactor(1, 1)
 
         main_layout.addWidget(splitter, 1)
 
     def _setup_statusbar(self):
         self.status_bar = QStatusBar()
-        self.status_bar.setStyleSheet("""
-            QStatusBar {
-                background-color: #161b22;
-                color: #8b949e;
-                border-top: 1px solid #21262d;
-                font-size: 11px;
-                padding: 2px 10px;
-            }
-        """)
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Hazır — Video yüklemek için 'Dosya Aç' butonunu kullanın")
+        self.status_bar.showMessage("Hazır — başlamak için bir video açın")
 
     # ────────────────────────────────────
     # DOSYA İŞLEMLERİ
@@ -414,11 +329,8 @@ class MainWindow(QMainWindow):
             cap.release()
 
             filename = os.path.basename(video_path)
-            self.info_labels["filename"].setText(filename)
-            self.info_labels["resolution"].setText(f"{w}x{h}")
-            self.info_labels["fps"].setText(f"{fps:.0f}")
-            self.info_labels["frames"].setText(str(fc))
-            self.info_labels["duration"].setText(f"{dur:.2f}s")
+            self.file_label.setText(filename)
+            self.meta_label.setText(f"{w}×{h}  ·  {fps:.0f} FPS  ·  {fc} kare  ·  {dur:.2f} sn")
 
             self.btn_analyze.setEnabled(True)
             self.btn_mark.setEnabled(True)
@@ -440,6 +352,8 @@ class MainWindow(QMainWindow):
         self.btn_open.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
+        self.progress_label.setVisible(True)
+        self.progress_label.setText("Analiz başlıyor...")
         self.status_bar.showMessage("Analiz devam ediyor...")
 
         self.worker = AnalysisWorker(
@@ -497,11 +411,13 @@ class MainWindow(QMainWindow):
 
     def _on_progress(self, percent: int, message: str):
         self.progress_bar.setValue(percent)
+        self.progress_label.setText(f"%{percent}  ·  {message}")
         self.status_bar.showMessage(message)
 
     def _on_analysis_finished(self, result: dict):
         """Analiz tamamlandığında sonuçları gösterir."""
         self.progress_bar.setVisible(False)
+        self.progress_label.setVisible(False)
         self.btn_analyze.setEnabled(True)
         self.btn_open.setEnabled(True)
 
@@ -513,6 +429,7 @@ class MainWindow(QMainWindow):
             result.get("video_info", {}).get("scale_factor", 1.0),
             highlight_frame=moment.get("frame"),
         )
+        self.video_player.set_overlay(True)  # Analizden sonra baş/ayak işaretleri açık gelir
 
         # Sonuçları panelde göster
         self.result_panel.display_results(result)
@@ -535,6 +452,7 @@ class MainWindow(QMainWindow):
 
     def _on_analysis_error(self, error_msg: str):
         self.progress_bar.setVisible(False)
+        self.progress_label.setVisible(False)
         self.btn_analyze.setEnabled(True)
         self.btn_open.setEnabled(True)
         self.status_bar.showMessage(f"Hata: {error_msg}")
