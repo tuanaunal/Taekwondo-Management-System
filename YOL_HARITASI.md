@@ -60,7 +60,7 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | 18 | Elle yazılmış eşikler yerine yorumlanabilir küçük model + doğru değerlendirme *(17 ile birlikte)* | ✅ | 33, 35, 36 |
 | 19 | Gerçek güven değeri ve otomatik gerekçe *(güven = benzer kararların dürüst ölçümdeki doğruluğu)* | ✅ | 31 |
 | | **5. Aşama – Arayüz ve rapor** | | |
-| 20 | Analizi tek geçişte yapmak | | 39, 40 |
+| 20 | Analizi tek geçişte yapmak *(işaretler oynatma sırasında çiziliyor; süre ~yarıya indi)* | ✅ | 39, 40 (kısmen), 43 |
 | 21 | Video ile grafikleri eşzamanlamak | | 41 |
 | 22 | Sensör durumu seçimi, temas anını görünür yapmak | | 44 |
 | 23 | Gerçek ilerleme çubuğu | | 42 |

@@ -74,6 +74,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
             'video_info': dict,         # Video meta bilgileri
             'contact_moment': dict,     # Temas ani (kare, yontem, hedef sporcu)
             'head_response': dict,      # Bas tepkisi: govdeye gore savrulma ve bas donusu
+            'frame_features': list,     # Her karenin bas/ayak konumlari (arayuzde isaret cizimi icin)
         }
     """
     # -- Modulleri baslat --
@@ -319,6 +320,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
         "graph_path": graph_path,
         "video_info": info,
         "contact_moment": contact_moment,
+        "frame_features": moment_features,
         "head_response": head_response,
     }
 

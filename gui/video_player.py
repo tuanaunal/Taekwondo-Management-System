@@ -15,6 +15,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QPoint
 from PyQt5.QtGui import QImage, QPixmap, QCursor
 
+from gui.overlay import draw_frame_features
+
 
 class ZoomableVideoLabel(QLabel):
     """
@@ -133,7 +135,9 @@ class VideoPlayerWidget(QWidget):
         super().__init__(parent)
         self.cap = None
         self.frames = []          # Tüm kareleri bellekte tut (kısa videolar)
-        self.overlay_frames = []  # Segmentasyon overlay kareleri
+        self.frame_features = []  # Analizin her kare için baş/ayak konumları (işaret çizimi için)
+        self.feature_scale = 1.0  # Analiz koordinatlarının ölçek faktörü
+        self.highlight_frame = None  # Temas anı karesi (sarı çerçeveyle gösterilir)
         self.current_frame = 0
         self.total_frames = 0
         self.fps = 30
@@ -423,7 +427,8 @@ class VideoPlayerWidget(QWidget):
         """Video dosyasını yükler ve tüm kareleri belleğe alır."""
         self.stop()
         self.frames = []
-        self.overlay_frames = []
+        self.frame_features = []
+        self.highlight_frame = None
         self.video_label.reset_zoom()
         self._set_speed(1.0)
 
@@ -450,9 +455,12 @@ class VideoPlayerWidget(QWidget):
 
         return True
 
-    def set_overlay_frames(self, overlay_frames: list):
-        """Segmentasyon overlay karelerini ayarlar."""
-        self.overlay_frames = overlay_frames
+    def set_frame_features(self, frame_features: list, scale: float, highlight_frame=None):
+        """Analizin kare verilerini ayarlar; işaretler oynatma sırasında o anki kareye çizilir."""
+        self.frame_features = frame_features or []
+        self.feature_scale = scale or 1.0
+        self.highlight_frame = highlight_frame
+        self._display_frame(self.current_frame)
 
     # ────────────────────────────────────
     # OYNATMA KONTROLLERİ
@@ -524,10 +532,9 @@ class VideoPlayerWidget(QWidget):
         frame = self.frames[idx].copy()
 
         # Overlay göster
-        if self.show_overlay and idx < len(self.overlay_frames):
-            overlay = self.overlay_frames[idx]
-            if overlay is not None:
-                frame = cv2.addWeighted(frame, 0.6, overlay, 0.4, 0)
+        if self.show_overlay and idx < len(self.frame_features):
+            frame = draw_frame_features(frame, self.frame_features[idx], self.feature_scale,
+                                        highlight=(idx == self.highlight_frame))
 
         h, w = frame.shape[:2]
         self.video_label._frame_w = w

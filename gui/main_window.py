@@ -35,8 +35,6 @@ if project_root not in sys.path:
 
 from gui.video_player import VideoPlayerWidget
 from gui.result_panel import ResultPanel
-from src.preprocessor import VideoPreprocessor
-from src.segmentor import EquipmentSegmentor
 from src.config import GRAPHS_DIR, REPORTS_DIR
 
 
@@ -63,38 +61,11 @@ class AnalysisWorker(QThread):
             # Analiz çalıştır
             result = analyze_video(self.video_path, verbose=False)
 
-            self.progress.emit(80, "Overlay kareleri oluşturuluyor...")
-
-            # Overlay kareleri oluştur
-            overlay_frames = self._generate_overlays(self.video_path)
-            result["overlay_frames"] = overlay_frames
-
             self.progress.emit(100, "Tamamlandı!")
             self.finished.emit(result)
 
         except Exception as e:
             self.error.emit(str(e))
-
-    def _generate_overlays(self, video_path: str) -> list:
-        """Segmentasyon overlay karelerini oluşturur (analizle aynı iki geçişli sporcu seçimi)."""
-        preprocessor = VideoPreprocessor()
-        segmentor = EquipmentSegmentor()
-
-        frames = []
-        cap = cv2.VideoCapture(video_path)
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frames.append(frame)
-        cap.release()
-
-        frame_features = segmentor.segment_video(preprocessor.process_frame(f) for f in frames)
-        return [
-            segmentor.draw_segmentation(frame, seg_results, alpha=0.5)
-            for frame, seg_results in zip(frames, frame_features)
-        ]
-
 
 class MainWindow(QMainWindow):
     """
@@ -408,10 +379,14 @@ class MainWindow(QMainWindow):
         self.btn_analyze.setEnabled(True)
         self.btn_open.setEnabled(True)
 
-        # Overlay karelerini video oynatıcıya aktar
-        overlay_frames = result.pop("overlay_frames", [])
-        if overlay_frames:
-            self.video_player.set_overlay_frames(overlay_frames)
+        # İşaretler: analizin kare verileri oynatıcıya verilir, o anki kareye çizilir
+        # (eskiden video YOLO ile ikinci kez işlenip tüm işaretli kareler bellekte tutuluyordu)
+        moment = result.get("contact_moment", {})
+        self.video_player.set_frame_features(
+            result.get("frame_features", []),
+            result.get("video_info", {}).get("scale_factor", 1.0),
+            highlight_frame=moment.get("frame"),
+        )
 
         # Sonuçları panelde göster
         self.result_panel.display_results(result)
