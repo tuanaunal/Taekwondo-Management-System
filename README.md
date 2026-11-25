@@ -75,13 +75,16 @@ YOLOv8-Pose model dosyası (`yolov8n-pose.pt`) repoda bulunur. Windows'ta progra
 python main.py
 ```
 
-1. **Video Dosyası Aç** ile bir müsabaka kesiti seçin.
+![Arayüz](docs/arayuz.png)
+
+1. **Video Aç** ile bir müsabaka kesiti seçin.
 2. İsteğe bağlı **hakem girdileri**:
    - *Sensör puan verdi mi?* — Bilinmiyor / Puan verdi / Puan vermedi. Analizden sonra değiştirilirse karar anında güncellenir.
-   - *Temas anı* — videoyu durdurup **Bu kareyi işaretle**. Birden fazla an işaretlenebilir; işaret yoksa an otomatik bulunur.
-3. **Analizi Başlat**. İlerleme çubuğu işlenen kareleri gösterir.
-4. Sonuç panelinde karar, güven ve gerekçe görünür. Grafikler ve kare tablosu videoyla birlikte ilerler; tablodan bir satıra tıklanınca video o kareye gider. **Overlay** düğmesi baş ve ayak işaretlerini gösterir.
-5. **Rapor Kaydet** ile tek sayfalık PDF rapor alınır.
+   - *Temas anı* — videoyu durdurup **İşaretle**. Birden fazla an işaretlenebilir; işaret yoksa an otomatik bulunur.
+3. **Analizi Başlat**. İlerleme çubuğu işlenen kareleri ve aşamayı gösterir.
+4. **Karar kartı:** karar (görüntü ve sensör özetiyle), modelin temas olasılığı, kalibre güven ve kararı etkileyen ölçümlerin temas / temassızlık lehine katkıları.
+5. **Grafikler** (kare kare baş dönüşü ve ayağın rakip başa uzaklığı) ve **kare tablosu** videoyla birlikte ilerler; grafiğe veya tabloya tıklanınca video o kareye gider. **İşaretler** düğmesi baş ve ayak işaretlerini gösterir (analizden sonra açık gelir).
+6. **PDF Rapor Kaydet** ile tek sayfalık PDF rapor alınır.
 
 ### Komut satırı
 
@@ -104,7 +107,7 @@ print(sonuc["decision_result"]["label_tr"], sonuc["decision_result"]["confidence
 | `python degerlendir.py` | 20 orijinal klipte doğruluğu ölçer; `--tumu` ile 120 videonun tamamında, görüntü koşullarına göre dayanıklılıkla birlikte. Sonuçlar `output/reports/degerlendirme_gecmisi.csv` dosyasına eklenir. *Not: model bu videolarla eğitildiği için buradaki doğruluk iyimserdir; araç dürüst doğruluğu ayrıca yazar.* |
 | `python egit.py` | Ölçümleri çıkarır (~10-15 dk), modeli **birini dışarıda bırakarak** değerlendirir, güven kalibrasyonunu hesaplar ve `model/karar_modeli.json` dosyasına kaydeder. `--onbellek` önceki ölçümleri kullanır. |
 | `python sonuc_raporu.py` | `egit.py`'nin ölçümlerinden dürüst sonuç raporunu (`SONUC_RAPORU.md`) ve grafiklerini (`sonuc/`) üretir: karmaşıklık matrisi, klip klip sonuçlar, hatalar. |
-| `python -m pytest` | 25 otomatik test (~4 sn; YOLO ve video gerektirmez). |
+| `python -m pytest` | 26 otomatik test (~4 sn; YOLO ve video gerektirmez). |
 
 ---
 
@@ -146,7 +149,8 @@ egit.py              Karar modelinin eğitimi ve dürüst değerlendirmesi
 sonuc_raporu.py      Sonuç raporu üretici (SONUC_RAPORU.md + sonuc/ grafikleri)
 augment.py           Veri çoğaltma (görüntü işleme)
 src/                 Analiz modülleri (algılama, temas anı, baş tepkisi, karar, PDF rapor)
-gui/                 PyQt5 arayüzü
+gui/                 PyQt5 arayüzü (theme.py: ortak renkler, decision_card.py: karar kartı)
+docs/                Arayüz ekran görüntüsü
 model/               Eğitilmiş karar modeli (karar_modeli.json)
 tests/               Otomatik testler
 etiketleme/          Darbe karesi işaretleri ve işaretleme talimatı
