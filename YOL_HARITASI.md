@@ -63,7 +63,7 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | 20 | Analizi tek geçişte yapmak *(işaretler oynatma sırasında çiziliyor; süre ~yarıya indi)* | ✅ | 39, 40 (kısmen), 43 |
 | 21 | Video ile grafikleri eşzamanlamak *(dikey kare çizgisi, seçili tablo satırı, tablodan kareye gitme)* | ✅ | 41 |
 | 22 | Sensör durumu seçimi, temas anını işaretlemek *(hakem girdileri kutusu; sensör değişince karar anında güncellenir)* | ✅ | 44, 34 |
-| 23 | Gerçek ilerleme çubuğu | | 42 |
+| 23 | Gerçek ilerleme çubuğu *(kare kare ilerleme ve aşama mesajları)* | ✅ | 42 |
 | 24 | PDF raporu yenilemek | | 43, 49 (kısmen) |
 | | **6. Aşama – Kalite ve dokümantasyon** | | |
 | 25 | Otomatik testler | | 48 |

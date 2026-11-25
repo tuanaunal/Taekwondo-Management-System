@@ -55,15 +55,16 @@ class AnalysisWorker(QThread):
 
     def run(self):
         try:
-            self.progress.emit(5, "Modüller yükleniyor...")
+            self.progress.emit(1, "Modüller yükleniyor...")
             from main import analyze_video
 
-            self.progress.emit(10, "Video analiz ediliyor...")
+            self.progress.emit(3, "Video açılıyor...")
 
             # Analiz çalıştır
             result = analyze_video(self.video_path, verbose=False,
                                    sensor_scored=self.sensor_scored,
-                                   contact_ranges=self.contact_ranges)
+                                   contact_ranges=self.contact_ranges,
+                                   progress_callback=self.progress.emit)
 
             self.progress.emit(100, "Tamamlandı!")
             self.finished.emit(result)

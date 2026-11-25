@@ -39,7 +39,7 @@ from src.head_response import compute_head_response
 
 def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True,
                   contact_frame: int = None, sensor_scored: bool = None,
-                  contact_ranges: list = None) -> dict:
+                  contact_ranges: list = None, progress_callback=None) -> dict:
     """
     Tek bir video dosyasini uctan uca analiz eder.
 
@@ -58,6 +58,8 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     contact_frame : int, optional
         Kullanicinin (orn. hakemin) isaretledigi, sensorun puan verdigi kare.
         Verilmezse temas ani otomatik bulunur.
+    progress_callback : callable(int, str), optional
+        Ilerleme bildirimi: (yuzde 0-100, Turkce asama mesaji). Arayuzdeki ilerleme cubugu icin.
     sensor_scored : bool, optional
         Sensor puan verdi mi? (True / False). Verilirse karar, goruntu karariyla birlestirilir:
         Puan Gecerli / Ghost Hit / Kacirilan Vurus / Dogru Karar. Verilmezse sadece goruntu karari.
@@ -108,11 +110,21 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     # 1-2. On-isleme ve sporcu tespiti (iki gecis):
     #   1. gecis: tum karelerde kisiler tespit edilir, kalici takip numaralari ve renk oylari toplanir
     #   2. gecis: kirmizi/mavi sporcu video geneline gore secilir, her kare icin ozellikler uretilir
+    def report(percent, message):
+        if progress_callback is not None:
+            progress_callback(int(percent), message)
+
+    total = max(1, info["frame_count"])
+
     def processed_frames():
+        # 1. gecis (YOLO) analizin en uzun kismi: ilerlemenin %5-%80'i
+        n = 0
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
+            n += 1
+            report(5 + 75 * min(n, total) / total, f"Kişiler tespit ediliyor: {n}/{total} kare")
             yield preprocessor.process_frame(frame)
 
     frame_features = segmentor.segment_video(processed_frames())
@@ -126,6 +138,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     # Temas ani icin her karenin bas/ayak konumlari (maskeler olmadan, bellek dostu)
     moment_features = []
 
+    report(80, "Sporcular seçiliyor, kare verileri hazırlanıyor...")
     for seg_results in frame_features:
         moment_features.append({
             key: {k: v for k, v in seg_results.get(key, {}).items() if k != "mask" and k != "contours"}
@@ -208,6 +221,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     if verbose:
         print(f"  Toplam islenen kare: {frame_idx}")
 
+    report(90, "Temas anı ve hareket analizi yapılıyor...")
     # -- Temas Ani --
     range_frames = None
     if contact_ranges:
@@ -302,6 +316,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
         if verbose:
             print(f"  Grafik kaydedildi: {graph_path}")
 
+    report(97, "Karar veriliyor...")
     # -- Nihai Karar --
     decision_result = decision_engine.make_decision(
         contact_summary, kinematic_result,
