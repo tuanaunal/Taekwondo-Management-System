@@ -1,8 +1,8 @@
 """
 result_panel.py — Analiz Sonuç Paneli
 =======================================
-Karar kartı, ivme-zaman grafiği, temas mesafesi grafiği
-ve detaylı log tablosu içeren sonuç paneli.
+Karar kartı, baş dönüşü ve ayak-baş mesafesi grafikleri ve kare kare durum
+tablosu içeren sonuç paneli.
 """
 
 import os
@@ -21,7 +21,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QColor
 
-from src.config import REPORTS_DIR
+from src.config import REPORTS_DIR, CONTACT_MARGIN_RADII, NEAR_MISS_MARGIN_RADII
+from src.decision_engine import CONTACT_GAP_CAP
 from gui import theme
 from gui.decision_card import DecisionCard
 
@@ -63,6 +64,7 @@ class ResultPanel(QWidget):
         self.figure.set_facecolor(theme.SURFACE)
         self.canvas = FigureCanvas(self.figure)
         self.canvas.setMinimumHeight(160)
+        self.canvas.mpl_connect("button_press_event", self._on_canvas_click)
         graph_layout.addWidget(self.canvas)
         self.tabs.addTab(graphs_page, "Grafikler")
 
@@ -73,6 +75,9 @@ class ResultPanel(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.cellClicked.connect(self._on_table_clicked)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setShowGrid(False)
         table_layout.addWidget(self.table)
         self.tabs.addTab(table_page, "Kare tablosu")
 
@@ -97,124 +102,195 @@ class ResultPanel(QWidget):
             main.analyze_video() çıktısı.
         """
         decision = analysis_result.get("decision_result", {})
-        contact = analysis_result.get("contact_summary", {})
-        kinematic = analysis_result.get("kinematic_result", {})
         frame_log = analysis_result.get("frame_log", [])
+        head = analysis_result.get("head_response", {}) or {}
+        moment = analysis_result.get("contact_moment", {}) or {}
+        ranges = analysis_result.get("contact_ranges") or []
 
         # ── Karar ──
         self.decision_card.display(decision)
         self.btn_save_report.setEnabled(True)
 
+        rotation = {c: (head.get(c, {}) or {}).get("rotation_series") or [] for c in ("red", "blue")}
+
         # ── Grafik ──
-        self._plot_analysis(contact, kinematic)
+        self._plot_analysis(frame_log, rotation, moment, ranges)
 
         # ── Tablo ──
-        self._populate_table(frame_log)
+        self._populate_table(frame_log, rotation, moment.get("frame"))
 
-    def _plot_analysis(self, contact: dict, kinematic: dict):
-        """İvme ve temas mesafesi grafiklerini çizer."""
+    # ────────────────────────────────────
+    # GRAFİKLER
+    # ────────────────────────────────────
+    @staticmethod
+    def _style_axes(ax):
+        ax.set_facecolor(theme.SURFACE)
+        ax.tick_params(colors=theme.TEXT_2, labelsize=8, length=0)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        for side in ("left", "bottom"):
+            ax.spines[side].set_color(theme.BORDER)
+        ax.grid(axis="y", color=theme.BORDER, linewidth=0.6, alpha=0.7)
+        ax.set_axisbelow(True)
+
+    def _plot_analysis(self, frame_log: list, rotation: dict, moment: dict, ranges: list):
+        """
+        Kararın dayandığı ölçümleri kare kare çizer:
+          1. Baş dönüşü (kırmızı ve mavi sporcu) — modelin en etkili ölçümü
+          2. Ayak-baş mesafesi (baş yarıçapı) — temas / yakın geçiş bölgeleriyle
+        Temas anı ve hakemin işaretlediği kareler iki grafikte de gösterilir.
+        """
         self.figure.clear()
-
+        n = len(frame_log)
+        if n == 0:
+            self.canvas.draw()
+            return
+        x = np.arange(n)
         ax1 = self.figure.add_subplot(2, 1, 1)
-        ax2 = self.figure.add_subplot(2, 1, 2)
+        ax2 = self.figure.add_subplot(2, 1, 2, sharex=ax1)
+        for ax in (ax1, ax2):
+            self._style_axes(ax)
+            # Hakemin işaretlediği kareler
+            for a, b in ranges:
+                ax.axvspan(a - 0.5, b + 0.5, color=theme.ACCENT, alpha=0.18, linewidth=0)
+            # Temas anı
+            if moment.get("frame") is not None:
+                ax.axvline(moment["frame"], color=theme.TEXT_2, linewidth=1, linestyle=(0, (3, 3)))
 
-        # Stil
-        for ax in [ax1, ax2]:
-            ax.set_facecolor(theme.SURFACE)
-            ax.tick_params(colors="#8b949e", labelsize=8)
-            ax.spines["bottom"].set_color("#30363d")
-            ax.spines["top"].set_visible(False)
-            ax.spines["right"].set_visible(False)
-            ax.spines["left"].set_color("#30363d")
-            ax.yaxis.label.set_color("#c9d1d9")
-            ax.xaxis.label.set_color("#c9d1d9")
-            ax.title.set_color("#c9d1d9")
-
-        # ── İvme Grafiği ──
-        acc = kinematic.get("acceleration_profile", np.array([]))
-        if hasattr(acc, '__len__') and len(acc) > 0:
-            # Yatay eksen: videodaki kare numarası (video ve tabloyla aynı eksen)
-            x_acc = kinematic.get("profile_start_frame", 0) + np.arange(len(acc))
-            ax1.plot(x_acc, acc, color="#e94560", linewidth=1.5, marker="o", markersize=3)
-            ax1.fill_between(x_acc, acc, alpha=0.2, color="#e94560")
-            ax1.axhline(y=0, color="#30363d", linewidth=0.5)
-            ax1.set_title("İvme Profili", fontsize=10, fontweight="bold")
-            ax1.set_ylabel("İvme (px/s²)", fontsize=9)
-            ax1.set_xlabel("Kare", fontsize=9)
+        # ── 1. Baş dönüşü ──
+        drawn = False
+        for color, line_color, name in (("red", theme.BRAND_RED, "Kırmızı"), ("blue", theme.BRAND_BLUE, "Mavi")):
+            series = rotation.get(color) or []
+            if not series:
+                continue
+            y = np.array([np.nan if v is None else v for v in series[:n]], dtype=float)
+            if np.isnan(y).all():
+                continue
+            ax1.plot(np.arange(len(y)), y, color=line_color, linewidth=2, label=name)
+            drawn = True
+        ax1.set_title("Baş dönüşü", fontsize=10, color=theme.TEXT, loc="left", fontweight="bold")
+        ax1.set_ylabel("baş yarıçapı", fontsize=8, color=theme.TEXT_2)
+        if drawn:
+            leg = ax1.legend(fontsize=8, frameon=False, loc="lower right", bbox_to_anchor=(1.0, 0.98),
+                             ncol=2, labelcolor=theme.TEXT_2, borderaxespad=0)
+            for h in leg.legend_handles if hasattr(leg, "legend_handles") else leg.legendHandles:
+                h.set_linewidth(3)
+            ax1.set_ylim(bottom=0)
         else:
-            ax1.text(0.5, 0.5, "İvme verisi yok",
-                     ha="center", va="center", color="#8b949e",
-                     transform=ax1.transAxes)
+            ax1.text(0.5, 0.5, "Baş dönüşü ölçülemedi", ha="center", va="center",
+                     color=theme.TEXT_2, transform=ax1.transAxes, fontsize=9)
+        ax1.tick_params(labelbottom=False)
 
-        # ── Temas Mesafesi Grafiği ──
-        distances = contact.get("distance_profile", [])
-        overlaps = contact.get("overlap_profile", [])
-
-        if distances:
-            x = np.arange(len(distances))
-            # inf değerleri temizle
-            clean_dist = [d if d < 1e6 else np.nan for d in distances]
-            ax2.plot(x, clean_dist, color="#58a6ff", linewidth=1.5, marker="s", markersize=3, label="Kontur Mesafesi")
-            ax2.fill_between(x, clean_dist, alpha=0.15, color="#58a6ff")
-
-            if overlaps:
-                ax2_twin = ax2.twinx()
-                ax2_twin.bar(x, overlaps, alpha=0.4, color="#2ea043", label="Çakışma (px)")
-                ax2_twin.set_ylabel("Çakışma (px)", fontsize=9, color="#2ea043")
-                ax2_twin.tick_params(axis="y", colors="#2ea043", labelsize=8)
-                ax2_twin.spines["right"].set_color("#2ea043")
-
-            ax2.set_title("Temas Analizi", fontsize=10, fontweight="bold")
-            ax2.set_ylabel("Mesafe (px)", fontsize=9)
-            ax2.set_xlabel("Kare", fontsize=9)
+        # ── 2. Ayak-baş mesafesi ──
+        cap = CONTACT_GAP_CAP  # ayak hiç görülemeyen kareler bu değerde gösterilir
+        near, contact = 1.0 + NEAR_MISS_MARGIN_RADII, 1.0 + CONTACT_MARGIN_RADII
+        ax2.axhspan(0, contact, color=theme.GOOD, alpha=0.16, linewidth=0)
+        ax2.axhspan(contact, near, color=theme.WARN, alpha=0.12, linewidth=0)
+        ax2.text(n - 0.5, near + 0.4, "yeşil: temas  ·  sarı: yakın geçiş", fontsize=7.5,
+                 color=theme.TEXT_2, ha="right", va="bottom")
+        d = np.array([e.get("distance_radii", np.inf) for e in frame_log], dtype=float)
+        d[~np.isfinite(d)] = np.nan
+        if not np.isnan(d).all():
+            ax2.plot(x, np.minimum(d, cap), color=theme.TEXT, linewidth=2)
+            ax2.scatter(x, np.minimum(d, cap), s=10, color=theme.TEXT, zorder=3, linewidths=0)
         else:
-            ax2.text(0.5, 0.5, "Temas verisi yok",
-                     ha="center", va="center", color="#8b949e",
-                     transform=ax2.transAxes)
+            ax2.text(0.5, 0.6, "Ayak ve baş birlikte görülemedi", ha="center", va="center",
+                     color=theme.TEXT_2, transform=ax2.transAxes, fontsize=9)
+        ax2.set_ylim(0, cap)
+        ax2.set_title("En yakın ayağın rakip başa uzaklığı", fontsize=10, color=theme.TEXT,
+                      loc="left", fontweight="bold")
+        ax2.set_ylabel("baş yarıçapı", fontsize=8, color=theme.TEXT_2)
+        ax2.set_xlabel("Kare", fontsize=8, color=theme.TEXT_2)
+        ax2.set_xlim(-0.5, n - 0.5)
+
+        # Açıklama satırı
+        notes = []
+        if moment.get("frame") is not None:
+            notes.append("kesikli çizgi: temas anı")
+        if ranges:
+            notes.append("mavi alan: işaretlenen kareler")
+        notes.append("grafiğe tıklayın: video o kareye gider")
+        self.figure.text(0.01, 0.005, "  ·  ".join(notes), fontsize=7.5, color=theme.MUTED)
 
         # Videoyla eşzamanlı ilerleyen "şu anki kare" çizgisi
-        self._frame_lines = [ax.axvline(0, color="#f1c40f", linewidth=1.5, alpha=0.9)
-                             for ax in (ax1, ax2)]
-        self.figure.tight_layout(pad=1.5)
+        self._frame_lines = [ax.axvline(0, color=theme.WARN, linewidth=1.6) for ax in (ax1, ax2)]
+        self.figure.tight_layout(pad=1.0, rect=(0, 0.03, 1, 1))
         self.canvas.draw()
 
-    def _populate_table(self, frame_log: list):
-        """Kare bazlı log tablosunu doldurur."""
+    def _on_canvas_click(self, event):
+        """Grafiğe tıklanınca video o kareye gider."""
+        if event.inaxes is None or event.xdata is None or not self._row_for_frame:
+            return
+        frame = int(round(event.xdata))
+        if frame in self._row_for_frame:
+            self.frame_selected.emit(frame)
+
+    # ────────────────────────────────────
+    # KARE TABLOSU
+    # ────────────────────────────────────
+    STATUS_TR = {
+        "overlap": ("Temas", theme.GOOD),
+        "near_miss": ("Yakın geçiş", theme.WARN),
+        "no_contact": ("Uzak", None),
+        "no_detection": ("Görülemedi", None),
+    }
+
+    def _populate_table(self, frame_log: list, rotation: dict, moment_frame=None):
+        """Kare kare durum tablosunu doldurur."""
+        self._row_for_frame = {}
         if not frame_log:
             self.table.setRowCount(0)
             return
 
-        columns = ["Kare", "Zaman(s)", "Temas", "Çakışma(px)", "Merkez Mes.", "Kontur Mes."]
+        columns = ["Kare", "Zaman", "Durum", "Ayak-baş\nuzaklığı", "Dönüş\nkırmızı", "Dönüş\nmavi"]
         self.table.setColumnCount(len(columns))
         self.table.setHorizontalHeaderLabels(columns)
         self.table.setRowCount(len(frame_log))
 
-        self._row_for_frame = {}
-        for row, entry in enumerate(frame_log):
-            self._row_for_frame[int(entry.get("frame", row))] = row
-            items = [
-                str(entry.get("frame", "")),
-                f"{entry.get('time_sec', 0):.3f}",
-                entry.get("contact_type", "N/A"),
-                str(entry.get("overlap_px", 0)),
-                f"{entry.get('centroid_dist', 0):.1f}" if entry.get('centroid_dist', float('inf')) < 1e6 else "N/A",
-                f"{entry.get('contour_dist', 0):.1f}" if entry.get('contour_dist', float('inf')) < 1e6 else "N/A",
-            ]
+        def fmt_rot(color, i):
+            s = rotation.get(color) or []
+            v = s[i] if i < len(s) else None
+            return "–" if v is None else f"{v:.2f}"
 
+        bold = QFont()
+        bold.setBold(True)
+        for row, entry in enumerate(frame_log):
+            frame = int(entry.get("frame", row))
+            self._row_for_frame[frame] = row
+            status, status_color = self.STATUS_TR.get(entry.get("contact_type", ""), ("–", None))
+            dist = entry.get("distance_radii", float("inf"))
+            items = [
+                str(frame),
+                f"{entry.get('time_sec', 0):.2f} sn",
+                status + ("  ● temas anı" if frame == moment_frame else ""),
+                f"{dist:.1f}" if np.isfinite(dist) else "–",
+                fmt_rot("red", row),
+                fmt_rot("blue", row),
+            ]
             for col, text in enumerate(items):
                 item = QTableWidgetItem(text)
                 item.setTextAlignment(Qt.AlignCenter)
-
-                # Renk kodlama
-                contact_type = entry.get("contact_type", "")
-                if contact_type == "overlap":
-                    item.setBackground(QColor(46, 160, 67, 40))
-                elif contact_type == "near_miss":
-                    item.setBackground(QColor(210, 153, 34, 40))
-
+                if status_color:
+                    c = QColor(status_color)
+                    c.setAlpha(45)
+                    item.setBackground(c)
+                if col == 2 and status_color:
+                    item.setForeground(QColor(status_color))
+                if frame == moment_frame:
+                    item.setFont(bold)
                 self.table.setItem(row, col, item)
 
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setMinimumHeight(40)
+        self.table.verticalHeader().setDefaultSectionSize(26)
+        tips = ["Videodaki kare numarası", "Videonun başından itibaren süre",
+                "Ayak ile rakip baş arasındaki uzaklığa göre durum",
+                "En yakın ayağın rakip baş merkezine uzaklığı (baş yarıçapı cinsinden)",
+                "Kırmızı sporcunun baş dönüşü (baş yarıçapı)", "Mavi sporcunun baş dönüşü (baş yarıçapı)"]
+        for col, tip in enumerate(tips):
+            self.table.horizontalHeaderItem(col).setToolTip(tip)
 
     # ────────────────────────────────────
     # VİDEO İLE EŞZAMANLAMA

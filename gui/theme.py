@@ -277,6 +277,9 @@ QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
 QScrollBar::add-line, QScrollBar::sub-line {{
     width: 0; height: 0;
 }}
+QScrollBar::add-page, QScrollBar::sub-page {{
+    background: none;
+}}
 QSplitter::handle {{
     background-color: {BG};
 }}

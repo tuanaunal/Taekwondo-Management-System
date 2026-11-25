@@ -200,6 +200,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
             "overlap_px": best_contact["overlap_pixels"],
             "centroid_dist": best_contact["centroid_distance"],
             "contour_dist": best_contact["min_contour_distance"],
+            "distance_radii": best_contact.get("distance_radii", float("inf")),
         }
 
         # Takip edilen nesnelerin konumlarini ekle
@@ -337,6 +338,7 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
         "contact_moment": contact_moment,
         "frame_features": moment_features,
         "head_response": head_response,
+        "contact_ranges": contact_ranges or [],
     }
 
 

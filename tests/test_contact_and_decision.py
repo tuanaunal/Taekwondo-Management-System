@@ -87,3 +87,20 @@ def test_kalibre_guven_modelin_iddiasi_degil():
     d = DecisionEngine(MODEL).make_decision(CONTACT, {}, head_response=STRONG)
     assert d["confidence"] in (0.53, 0.56, 0.80)
     assert d["confidence_level"] in ("düşük", "orta", "yüksek")
+
+
+def test_kare_kare_bas_donusu_karardaki_degerle_ayni():
+    """Arayüz 2: grafikte çizilen kare kare baş dönüşünün en büyüğü, kararda kullanılan değere eşit olmalı."""
+    from src.head_response import compute_head_response
+
+    feats = []
+    for i in range(40):
+        dx = 0.0 if i < 20 else 15.0          # 20. kareden sonra burun yana kayıyor (baş dönüyor)
+        feats.append({"red_helmet": {"centroids": [(500 + dx, 300)], "head_center": (500, 300),
+                                     "head_radius": 26.0, "torso_center": (500, 400)},
+                      "blue_helmet": {}})
+    hr = compute_head_response(feats, 30.0)
+    series = [v for v in hr["red"]["rotation_series"] if v is not None]
+    assert len(hr["red"]["rotation_series"]) == 40
+    assert max(series) == pytest.approx(hr["red"]["rotation"], abs=1e-3)
+    assert hr["red"]["rotation"] > 0.3

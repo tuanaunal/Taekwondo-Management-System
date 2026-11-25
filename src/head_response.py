@@ -81,6 +81,19 @@ def _max_window_change(series: np.ndarray, half: int, centers=None):
     return best, best_t
 
 
+def window_change_series(series: np.ndarray, half: int) -> np.ndarray:
+    """
+    Her kare için, o karenin çevresindeki pencerede (t-half .. t+half) oluşan değişim.
+    _max_window_change'in kare kare hali: arayüzdeki grafikte gösterilir (ölçülemeyen kareler NaN).
+    """
+    out = np.full(len(series), np.nan)
+    for t in range(half, len(series) - half):
+        a, b = series[t - half], series[t + half]
+        if not (np.isnan(a[0]) or np.isnan(b[0])):
+            out[t] = float(np.linalg.norm(b - a))
+    return out
+
+
 def athlete_series(frame_features: list, color: str) -> dict:
     """Bir sporcunun kare kare burun, baş merkezi, baş yarıçapı ve gövde merkezi serilerini çıkarır."""
     n = len(frame_features)
@@ -159,6 +172,9 @@ def compute_head_response(frame_features: list, fps: float,
             "relative_swing": rel_v, "relative_frame": rel_t,
             "rotation": rot_v, "rotation_frame": rot_t,
             "coverage": coverage,  # başın gerçekten ölçüldüğü karelerin oranı
+            # Kare kare baş dönüşü (grafik için; ölçülemeyen kareler None)
+            "rotation_series": [None if np.isnan(v) else round(float(v), 4)
+                                for v in window_change_series(orientation, half)],
         }
     keys = ("absolute_swing", "relative_swing", "rotation")
     if target in ("red", "blue"):
