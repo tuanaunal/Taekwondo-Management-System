@@ -30,18 +30,17 @@ for d in [LOGS_DIR, GRAPHS_DIR, REPORTS_DIR]:
 # ──────────────────────────────────────────────
 # 2. VIDEO STANDARDIZASYON
 # ──────────────────────────────────────────────
+# Videonun FPS bilgisi okunamazsa kullanılan varsayılan değer.
+# Kinematik hesaplar her zaman videonun GERÇEK FPS değeriyle yapılır.
 TARGET_FPS = 30
-TARGET_WIDTH = 1920
-TARGET_HEIGHT = 1080
+# Not: Çözünürlük standardizasyonu (eski TARGET_WIDTH/HEIGHT) kaldırıldı;
+# mesafeler sporcunun baş yarıçapına göre ölçekleniyor (bkz. segmentor.py).
 
 # ──────────────────────────────────────────────
 # 3. CLAHE ve ÖN-İŞLEME PARAMETRELERİ
 # ──────────────────────────────────────────────
 CLAHE_CLIP_LIMIT = 2.0
 CLAHE_TILE_GRID_SIZE = (8, 8)
-
-GAUSSIAN_KERNEL_SIZE = (5, 5)
-MEDIAN_KERNEL_SIZE = 5
 
 # ──────────────────────────────────────────────
 # 4. HSV RENK ARALLIKLARI (Taekwondo Ekipmanları)
@@ -99,37 +98,25 @@ ACCELERATION_IMPACT_THRESHOLD = 1500.0
 # İvme profili sınıflandırma parametreleri
 # Darbe ivmesi: kısa sürede yüksek tepe noktası
 # Aktif kaçış: kademeli, düşük ivme
-IMPACT_DURATION_MAX_FRAMES = 5       # Darbe en fazla bu kadar frame sürer
+IMPACT_DURATION_MAX_FRAMES = 5       # Darbe en fazla bu kadar frame sürer (30 FPS referansıyla;
+                                     # farklı FPS'te aynı süreye denk gelecek şekilde ölçeklenir)
 EVASION_SMOOTHNESS_THRESHOLD = 0.6   # İvme varyasyon katsayısı eşiği
 
 # ──────────────────────────────────────────────
 # 7. TEMAS ANALİZİ EŞİKLERİ
 # ──────────────────────────────────────────────
-# Piksel bazlı çakışma eşiği — bu kadar piksel çakışırsa temas VAR
-# Not: Segmentasyon düzeltildikten sonra 20px yeterli hassasiyet sağlıyor
-CONTACT_OVERLAP_THRESHOLD = 20
-
-# Öklid mesafesi eşiği (piksel) — merkezler arası
-# Bu mesafeden yakınsa "yakın geçiş" (near miss), değilse "temas yok"
-PROXIMITY_THRESHOLD = 80
-
-# Kontur sınır mesafesi eşiği (piksel)
-# 20px içindeyse "yakın geçiş" (near miss)
-CONTOUR_DISTANCE_THRESHOLD = 20
+# Temas, ayak noktalarının (ayak ucu + ayak bileği) rakibin baş merkezine uzaklığıyla ölçülür.
+# Eşikler BAŞ YARIÇAPI cinsindendir; böylece kamera uzaklığından bağımsızdır.
+#   uzaklık <= (1 + CONTACT_MARGIN_RADII) yarıçap   -> temas
+#   uzaklık <= (1 + NEAR_MISS_MARGIN_RADII) yarıçap -> yakın geçiş (near miss)
+# Pay, ayak genişliği ve iskelet noktası tahmin hatası içindir.
+CONTACT_MARGIN_RADII = 0.5
+NEAR_MISS_MARGIN_RADII = 1.5
+# Not: İki boyutlu görüntüde temas ile temassız geçiş ayırt edilemeyebilir (bkz. YOL_HARITASI.md,
+# Bulgu 3). Bu yüzden temas kararda sadece destekleyici bir kanıttır.
 
 # ──────────────────────────────────────────────
-# 8. ROI (Region of Interest) AYARLARI
-# ──────────────────────────────────────────────
-# Arka plan çıkarma (MOG2) parametreleri
-MOG2_HISTORY = 50
-MOG2_VAR_THRESHOLD = 40
-MOG2_DETECT_SHADOWS = False
-
-# ROI genişletme marjini (piksel)
-ROI_MARGIN = 50
-
-# ──────────────────────────────────────────────
-# 9. GÖRSELLEŞTİRME AYARLARI
+# 8. GÖRSELLEŞTİRME AYARLARI
 # ──────────────────────────────────────────────
 # Renk kodları (BGR formatı, OpenCV için)
 VIS_COLOR_RED = (0, 0, 255)
@@ -143,11 +130,9 @@ VIS_LINE_THICKNESS = 2
 VIS_FONT_SCALE = 0.7
 
 # ──────────────────────────────────────────────
-# 10. KARAR MOTORU AĞIRLIKLARI
+# 9. KARAR MOTORU AĞIRLIKLARI
 # ──────────────────────────────────────────────
 # Nihai karar için bileşen ağırlıkları
-WEIGHT_CONTACT = 0.5        # Temas analizi ağırlığı
-WEIGHT_KINEMATICS = 0.5     # Kinematik analiz ağırlığı
-
-# Güven skoru eşiği
-CONFIDENCE_THRESHOLD = 0.6
+# Not: Eski WEIGHT_CONTACT / WEIGHT_KINEMATICS / CONFIDENCE_THRESHOLD değerleri hiçbir
+# karara katılmıyordu ve kaldırıldı. Karar artık veriden öğrenilen modelle veriliyor
+# (model/karar_modeli.json, eğitim: egit.py).

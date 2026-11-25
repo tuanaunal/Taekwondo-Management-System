@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QPushButton,
     QHeaderView, QFrame, QScrollArea, QGroupBox,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QColor
 
 from src.config import REPORTS_DIR
@@ -27,10 +27,18 @@ from src.config import REPORTS_DIR
 class ResultPanel(QWidget):
     """
     Analiz sonuçlarını görsel olarak sunan panel.
+
+    Video ile eşzamanlı çalışır: set_current_frame() grafiklerdeki dikey kare çizgisini
+    ve tablodaki seçili satırı günceller; tablodaki bir satıra tıklanınca frame_selected
+    sinyaliyle video o kareye gider.
     """
+
+    frame_selected = pyqtSignal(int)  # Kullanıcı tablodan bir kare seçti
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._frame_lines = []   # Grafiklerdeki dikey "şu anki kare" çizgileri
+        self._row_for_frame = {}  # kare numarası -> tablo satırı
         self._setup_ui()
 
     def _setup_ui(self):
@@ -156,6 +164,9 @@ class ResultPanel(QWidget):
                 font-size: 11px;
             }
         """)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.cellClicked.connect(self._on_table_clicked)
         table_layout.addWidget(self.table)
 
         # Rapor kaydet butonu
@@ -209,7 +220,9 @@ class ResultPanel(QWidget):
         self.decision_label.setStyleSheet(
             f"color: {color}; padding: 15px; font-size: 26px; font-weight: 900; background-color: {color}15; border-radius: 8px; border: 1px solid {color}30;"
         )
-        self.confidence_label.setText(f"Güven: {confidence:.1%}")
+        level = decision.get("confidence_level", "")
+        level_txt = f" ({level})" if level and level != "-" else ""
+        self.confidence_label.setText(f"Güven: {confidence:.1%}{level_txt}")
         self.confidence_label.setStyleSheet(f"color: {color};")
         self.reasoning_label.setText(reasoning)
 
@@ -241,12 +254,14 @@ class ResultPanel(QWidget):
         # ── İvme Grafiği ──
         acc = kinematic.get("acceleration_profile", np.array([]))
         if hasattr(acc, '__len__') and len(acc) > 0:
-            x_acc = np.arange(len(acc))
+            # Yatay eksen: videodaki kare numarası (video ve tabloyla aynı eksen)
+            x_acc = kinematic.get("profile_start_frame", 0) + np.arange(len(acc))
             ax1.plot(x_acc, acc, color="#e94560", linewidth=1.5, marker="o", markersize=3)
             ax1.fill_between(x_acc, acc, alpha=0.2, color="#e94560")
             ax1.axhline(y=0, color="#30363d", linewidth=0.5)
             ax1.set_title("İvme Profili", fontsize=10, fontweight="bold")
             ax1.set_ylabel("İvme (px/s²)", fontsize=9)
+            ax1.set_xlabel("Kare", fontsize=9)
         else:
             ax1.text(0.5, 0.5, "İvme verisi yok",
                      ha="center", va="center", color="#8b949e",
@@ -278,6 +293,9 @@ class ResultPanel(QWidget):
                      ha="center", va="center", color="#8b949e",
                      transform=ax2.transAxes)
 
+        # Videoyla eşzamanlı ilerleyen "şu anki kare" çizgisi
+        self._frame_lines = [ax.axvline(0, color="#f1c40f", linewidth=1.5, alpha=0.9)
+                             for ax in (ax1, ax2)]
         self.figure.tight_layout(pad=1.5)
         self.canvas.draw()
 
@@ -292,7 +310,9 @@ class ResultPanel(QWidget):
         self.table.setHorizontalHeaderLabels(columns)
         self.table.setRowCount(len(frame_log))
 
+        self._row_for_frame = {}
         for row, entry in enumerate(frame_log):
+            self._row_for_frame[int(entry.get("frame", row))] = row
             items = [
                 str(entry.get("frame", "")),
                 f"{entry.get('time_sec', 0):.3f}",
@@ -317,8 +337,31 @@ class ResultPanel(QWidget):
 
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
+    # ────────────────────────────────────
+    # VİDEO İLE EŞZAMANLAMA
+    # ────────────────────────────────────
+    def set_current_frame(self, idx: int):
+        """Videoda gösterilen kareyi grafiklerde (dikey çizgi) ve tabloda (seçili satır) gösterir."""
+        if self._frame_lines:
+            for line in self._frame_lines:
+                line.set_xdata([idx, idx])
+            self.canvas.draw_idle()
+        row = self._row_for_frame.get(int(idx))
+        if row is not None and row < self.table.rowCount():
+            self.table.blockSignals(True)
+            self.table.selectRow(row)
+            self.table.scrollToItem(self.table.item(row, 0))
+            self.table.blockSignals(False)
+
+    def _on_table_clicked(self, row: int, _col: int):
+        item = self.table.item(row, 0)
+        if item is not None and item.text().isdigit():
+            self.frame_selected.emit(int(item.text()))
+
     def clear(self):
         """Paneli temizler."""
+        self._frame_lines = []
+        self._row_for_frame = {}
         self.decision_label.setText("Analiz bekleniyor...")
         self.decision_label.setStyleSheet("color: #8899aa; padding: 15px; background-color: #16213e; border-radius: 8px;")
         self.confidence_label.setText("")

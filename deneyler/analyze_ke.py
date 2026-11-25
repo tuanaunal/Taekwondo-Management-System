@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 
-csv_path = os.path.join(os.path.dirname(__file__), "output", "reports", "batch_summary_detailed.csv")
+csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output", "reports", "batch_summary_detailed.csv")
 df = pd.read_csv(csv_path)
 
 # Ghost Hits

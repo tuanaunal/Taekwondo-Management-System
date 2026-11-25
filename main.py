@@ -1,11 +1,16 @@
 """
-main.py — Taekwondo Ghost Hit Detection: CLI Giris Noktasi
+main.py — Taekwondo Ghost Hit Detection: Tek Giris Noktasi
 ============================================================
-Tek bir video dosyasini analiz ederek Ghost Hit / Real Hit karari verir.
+Projenin tek giris noktasidir.
 
 Kullanim:
-    python main.py <video_yolu>
+    python main.py                               -> Arayuz (GUI) acilir
+    python main.py <video_yolu>                  -> Tek video komut satirinda analiz edilir
     python main.py Dataset/Ghost_Hit/GH_01.mp4
+
+Not: Windows'ta PyQt5, PyTorch'tan once yuklenirse torch DLL'leri acilamiyor
+(WinError 1114). Bu dosya src modullerini (ve dolayisiyla torch'u) en basta
+yukledigi icin arayuz sorunsuz acilir.
 """
 
 import sys
@@ -22,16 +27,19 @@ if sys.stdout.encoding != 'utf-8':
 # Proje kok dizinini Python yoluna ekle
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.config import GRAPHS_DIR, LOGS_DIR, TARGET_FPS
+from src.config import GRAPHS_DIR, LOGS_DIR
 from src.preprocessor import VideoPreprocessor, load_video, get_video_info
 from src.segmentor import EquipmentSegmentor
-from src.tracker import MultiObjectTracker
 from src.kinematics import KinematicAnalyzer
 from src.contact_analyzer import ContactAnalyzer
 from src.decision_engine import DecisionEngine
+from src.contact_moment import find_contact_moment, METHOD_USER, METHOD_APPROACH
+from src.head_response import compute_head_response
 
 
-def analyze_video(video_path: str, verbose: bool = True) -> dict:
+def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True,
+                  contact_frame: int = None, sensor_scored: bool = None,
+                  contact_ranges: list = None, progress_callback=None) -> dict:
     """
     Tek bir video dosyasini uctan uca analiz eder.
 
@@ -41,6 +49,20 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
         Analiz edilecek video dosya yolu.
     verbose : bool
         Ayrintili cikti yazdir.
+    save_graph : bool
+        Ivme grafigini output/graphs klasorune kaydet (toplu testte kapatilir).
+    contact_ranges : list of (int, int), optional
+        Kullanicinin isaretledigi vurus kare araliklari, orn. [(11, 13), (17, 19)].
+        Bir klipte birden cok vurus ani olabilir; olcumler tum araliklara bakar ve en buyuk
+        bas tepkisini kullanir. Verilirse contact_frame ilk araligin ortasi kabul edilir.
+    contact_frame : int, optional
+        Kullanicinin (orn. hakemin) isaretledigi, sensorun puan verdigi kare.
+        Verilmezse temas ani otomatik bulunur.
+    progress_callback : callable(int, str), optional
+        Ilerleme bildirimi: (yuzde 0-100, Turkce asama mesaji). Arayuzdeki ilerleme cubugu icin.
+    sensor_scored : bool, optional
+        Sensor puan verdi mi? (True / False). Verilirse karar, goruntu karariyla birlestirilir:
+        Puan Gecerli / Ghost Hit / Kacirilan Vurus / Dogru Karar. Verilmezse sadece goruntu karari.
 
     Returns
     -------
@@ -52,26 +74,31 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
             'frame_log': list,          # Kare bazli log
             'graph_path': str,          # Ivme grafigi dosya yolu
             'video_info': dict,         # Video meta bilgileri
+            'contact_moment': dict,     # Temas ani (kare, yontem, hedef sporcu)
+            'head_response': dict,      # Bas tepkisi: govdeye gore savrulma ve bas donusu
+            'frame_features': list,     # Her karenin bas/ayak konumlari (arayuzde isaret cizimi icin)
         }
     """
     # -- Modulleri baslat --
     preprocessor = VideoPreprocessor()
     segmentor = EquipmentSegmentor()
-    tracker = MultiObjectTracker(max_disappeared=5)
-    kinematic_analyzer = KinematicAnalyzer(fps=TARGET_FPS)
     contact_analyzer = ContactAnalyzer()
     decision_engine = DecisionEngine()
 
     # -- Video ac --
     cap = load_video(video_path)
     info = get_video_info(cap)
+    # Hız ve ivme, videonun gerçek FPS değeriyle hesaplanır (60 FPS / ağır çekim
+    # videolarda 30 FPS varsaymak ivmeleri 4 kata kadar yanlış çıkarır).
+    kinematic_analyzer = KinematicAnalyzer(fps=info["fps"])
     video_name = os.path.splitext(os.path.basename(video_path))[0]
 
     if verbose:
         print(f"\n{'-' * 50}")
         print(f"  Video: {video_name}")
         print(f"  Cozunurluk: {info['width']}x{info['height']}")
-        print(f"  FPS: {info['fps']:.0f} | Kare: {info['frame_count']}")
+        fps_note = " (okunamadi, varsayilan)" if info["fps_estimated"] else ""
+        print(f"  FPS: {info['fps']:.0f}{fps_note} | Kare: {info['frame_count']}")
         print(f"  Sure: {info['duration_sec']:.2f}s")
         print(f"{'-' * 50}")
 
@@ -80,21 +107,47 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
     frame_log = []
     frame_idx = 0
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    # 1-2. On-isleme ve sporcu tespiti (iki gecis):
+    #   1. gecis: tum karelerde kisiler tespit edilir, kalici takip numaralari ve renk oylari toplanir
+    #   2. gecis: kirmizi/mavi sporcu video geneline gore secilir, her kare icin ozellikler uretilir
+    def report(percent, message):
+        if progress_callback is not None:
+            progress_callback(int(percent), message)
 
-        # 1. On-isleme
-        processed = preprocessor.process_frame(frame)
+    total = max(1, info["frame_count"])
 
-        # 2. Segmentasyon
-        seg_results = segmentor.segment_frame(processed)
+    def processed_frames():
+        # 1. gecis (YOLO) analizin en uzun kismi: ilerlemenin %5-%80'i
+        n = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            n += 1
+            report(5 + 75 * min(n, total) / total, f"Kişiler tespit ediliyor: {n}/{total} kare")
+            yield preprocessor.process_frame(frame)
 
-        # 3. Takip
-        tracking = tracker.update(seg_results, frame_idx)
+    frame_features = segmentor.segment_video(processed_frames())
+    cap.release()
+    # Tum mesafeler (temas, savrulma, ivme) bu carpanla "referans piksele" cevrildi:
+    # 26 referans piksel = bir bas yaricapi (bkz. segmentor.py, OLCEK NORMALIZASYONU)
+    info["scale_factor"] = segmentor.scale_factor
+    if verbose:
+        print(f"  Olcek faktoru: {segmentor.scale_factor:.2f}")
 
-        # 4. Temas analizi (her renk cifti icin)
+    # Temas ani icin her karenin bas/ayak konumlari (maskeler olmadan, bellek dostu)
+    moment_features = []
+
+    report(80, "Sporcular seçiliyor, kare verileri hazırlanıyor...")
+    for seg_results in frame_features:
+        moment_features.append({
+            key: {k: v for k, v in seg_results.get(key, {}).items() if k != "mask" and k != "contours"}
+            for key in ("red_helmet", "blue_helmet", "red_foot", "blue_foot")
+        })
+
+        # 3. Temas analizi (her renk cifti icin)
+        # Not: Sporcularin takibi segmentor icinde (ByteTrack + kalici kimlik) yapiliyor;
+        # eski agirlik merkezi takip modulu (tracker.py) Adim 16'da kaldirildi.
         # Kirmizi ayak -> Mavi kask (veya tam tersi)
         contact_pairs = [
             ("red_foot", "blue_helmet"),
@@ -165,25 +218,59 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
         if verbose and frame_idx % 10 == 0:
             print(f"  Islenen kare: {frame_idx}/{info['frame_count']}")
 
-    cap.release()
-
     if verbose:
         print(f"  Toplam islenen kare: {frame_idx}")
+
+    report(90, "Temas anı ve hareket analizi yapılıyor...")
+    # -- Temas Ani --
+    range_frames = None
+    if contact_ranges:
+        range_frames = [f for a, b in contact_ranges for f in range(int(a), int(b) + 1)]
+        if contact_frame is None:
+            a, b = contact_ranges[0]
+            contact_frame = (int(a) + int(b)) // 2
+    contact_moment = find_contact_moment(moment_features, info["fps"], user_frame=contact_frame)
+    if verbose:
+        if contact_moment["frame"] is None:
+            print("  Temas ani: bulunamadi")
+        else:
+            print(f"  Temas ani: kare {contact_moment['frame']} ({contact_moment['time_sec']:.2f} sn) - "
+                  f"{contact_moment['method_tr']}, hedef: {contact_moment['target']}")
+
+    # Olcumler temas anina SADECE an guvenilirse odaklanir: kullanicinin isaretledigi kare ya da
+    # ayagin basa gercekten yaklastigi kare. Otomatik "basin en hizli hareket ettigi kare" yontemi
+    # kliplerin yaklasik yarisinda yanlis kareye dusuyor; o kareye odaklanmak gercek tepkiyi
+    # pencerenin disinda birakip ayirt ediciligi dusuruyordu (bas donusu AUC %69 -> %52).
+    reliable_moment = contact_moment["method"] in (METHOD_USER, METHOD_APPROACH)
+    analysis_anchor = contact_moment["frame"] if reliable_moment else None
+    analysis_target = contact_moment["target"] if reliable_moment else None
+    contact_moment["used_for_analysis"] = reliable_moment
+
+    # -- Bas Tepkisi (govdeye gore savrulma, bas donusu) --
+    head_response = compute_head_response(moment_features, info["fps"],
+                                          anchor_frame=analysis_anchor,
+                                          target=analysis_target,
+                                          anchor_frames=range_frames if reliable_moment else None)
+    if verbose:
+        hr = head_response["max"]
+        print(f"  Bas tepkisi: govdeye gore savrulma {hr['relative_swing']:.1f} px, "
+              f"bas donusu {hr['rotation']:.2f} yaricap")
 
     # -- Temas Ozeti --
     contact_summary = contact_analyzer.analyze_video_contacts(frame_contacts)
 
     # -- Kinematik Analiz --
-    # Temasin veya en yakin gecisin gerceklestigi hedef kaski bul
-    target_helmet_key = None
+    # Hedef kask: temas aninda basi hedef alinan sporcu. Bilinmiyorsa (eski yontem)
+    # temasin veya en yakin gecisin gerceklestigi karedeki kask.
+    target_helmet_key = f"{contact_moment['target']}_helmet" if contact_moment["target"] else None
     
     # 1. Eger fiziksel temas varsa, en yuksek overlap olan karedeki kaski sec
     peak_overlap = 0
-    for r in frame_contacts:
+    for r in (frame_contacts if target_helmet_key is None else []):
         if r.get("contact_type") == "overlap" and r.get("overlap_pixels", 0) > peak_overlap:
             peak_overlap = r["overlap_pixels"]
             target_helmet_key = r.get("helmet_key")
-            
+
     # 2. Eger fiziksel temas yoksa, en yakin gecisin (min contour distance) oldugu karedeki kaski sec
     if target_helmet_key is None:
         min_dist = float("inf")
@@ -192,35 +279,36 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
             if dist < min_dist:
                 min_dist = dist
                 target_helmet_key = r.get("helmet_key")
-                
+
     # Geriye donuk varsayilan secim
     if target_helmet_key is None:
         target_helmet_key = "red_helmet"
 
-    all_traj = tracker.get_all_trajectories()
-    best_trajectory = []
-    best_traj_key = target_helmet_key
+    def helmet_trajectory(helmet_key):
+        """Kaskin (burun) gercekten olculdugu karelerden yorunge: [(x, y, kare), ...]"""
+        traj = []
+        for i, mf in enumerate(moment_features):
+            h = mf.get(helmet_key, {})
+            if h.get("centroids") and not h.get("held"):
+                x, y = h["centroids"][0]
+                traj.append((x, y, i))
+        return traj
 
-    # Secilen kaska ait en uzun yorungeyi al
-    trajs = all_traj.get(target_helmet_key, {})
-    for obj_id, traj in trajs.items():
-        if len(traj) > len(best_trajectory):
-            best_trajectory = traj
-            
-    # Eger secilen kask icin yorunge cok kisaysa veya bulunamazsa diger kaska bak (fallback)
+    # Sporcunun kimligi kopsa bile yorunge bolunmez (eskiden en uzun parca aliniyordu)
+    best_traj_key = target_helmet_key
+    best_trajectory = helmet_trajectory(target_helmet_key)
     if len(best_trajectory) < 3:
         other_key = "blue_helmet" if target_helmet_key == "red_helmet" else "red_helmet"
-        trajs = all_traj.get(other_key, {})
-        for obj_id, traj in trajs.items():
-            if len(traj) > len(best_trajectory):
-                best_trajectory = traj
-                best_traj_key = other_key
+        other = helmet_trajectory(other_key)
+        if len(other) > len(best_trajectory):
+            best_trajectory, best_traj_key = other, other_key
 
-    kinematic_result = kinematic_analyzer.classify_motion(best_trajectory)
+    kinematic_result = kinematic_analyzer.classify_motion(best_trajectory,
+                                                          anchor_frame=analysis_anchor)
 
     # Ivme grafigi olustur
     graph_path = ""
-    if len(best_trajectory) >= 3:
+    if save_graph and len(best_trajectory) >= 3:
         graph_path = kinematic_analyzer.plot_kinematics(
             best_trajectory,
             title=f"{video_name} - Kask Kinematigi",
@@ -228,9 +316,11 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
         if verbose:
             print(f"  Grafik kaydedildi: {graph_path}")
 
+    report(97, "Karar veriliyor...")
     # -- Nihai Karar --
     decision_result = decision_engine.make_decision(
         contact_summary, kinematic_result,
+        head_response=head_response, sensor_scored=sensor_scored,
     )
 
     if verbose:
@@ -244,6 +334,9 @@ def analyze_video(video_path: str, verbose: bool = True) -> dict:
         "frame_log": frame_log,
         "graph_path": graph_path,
         "video_info": info,
+        "contact_moment": contact_moment,
+        "frame_features": moment_features,
+        "head_response": head_response,
     }
 
 

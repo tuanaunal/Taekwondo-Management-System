@@ -1,0 +1,51 @@
+{
+  "features": [
+    "rotation",
+    "absolute_swing",
+    "contact_gap_radii"
+  ],
+  "mean": [
+    0.9803184721949361,
+    216.83582234399225,
+    11.052069199430347
+  ],
+  "std": [
+    0.4485538522024592,
+    100.68432405498145,
+    3.938735889100818
+  ],
+  "weights": [
+    0.6994882215917808,
+    0.3302580677676152,
+    -0.18212090488596802
+  ],
+  "bias": 0.006661775404871631,
+  "threshold": 0.5,
+  "kalibrasyon": [
+    {
+      "alt": 0.0,
+      "ust": 0.1,
+      "karar_sayisi": 36,
+      "dogruluk": 0.5278
+    },
+    {
+      "alt": 0.1,
+      "ust": 0.25,
+      "karar_sayisi": 54,
+      "dogruluk": 0.5556
+    },
+    {
+      "alt": 0.25,
+      "ust": 0.51,
+      "karar_sayisi": 30,
+      "dogruluk": 0.5333
+    }
+  ],
+  "egitim_tarihi": "2026-11-25 13:00",
+  "egitim_video_sayisi": 120,
+  "dogrulama": {
+    "yontem": "birini dışarıda bırakarak (klip + tüm kopyaları)",
+    "orijinal_20_dogruluk": 0.55,
+    "tum_120_dogruluk": 0.5417
+  }
+}
