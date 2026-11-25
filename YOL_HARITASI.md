@@ -64,7 +64,7 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | 21 | Video ile grafikleri eşzamanlamak *(dikey kare çizgisi, seçili tablo satırı, tablodan kareye gitme)* | ✅ | 41 |
 | 22 | Sensör durumu seçimi, temas anını işaretlemek *(hakem girdileri kutusu; sensör değişince karar anında güncellenir)* | ✅ | 44, 34 |
 | 23 | Gerçek ilerleme çubuğu *(kare kare ilerleme ve aşama mesajları)* | ✅ | 42 |
-| 24 | PDF raporu yenilemek | | 43, 49 (kısmen) |
+| 24 | PDF raporu yenilemek *(temas anı görüntüsü, grafikler, ölçümler, kalibre güven, sınırlar; "resmi" kaldırıldı; Türkçe karakterler)* | ✅ | 49 (kısmen) |
 | | **6. Aşama – Kalite ve dokümantasyon** | | |
 | 25 | Otomatik testler | | 48 |
 | 26 | README'yi yeniden yazmak | | 47, 49, 51 |

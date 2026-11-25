@@ -550,23 +550,14 @@ class MainWindow(QMainWindow):
     # RAPOR
     # ────────────────────────────────────
     def _save_report(self):
-        """Analiz raporunu PDF olarak Masaüstüne kaydeder."""
+        """Analiz raporunu PDF olarak kaydeder (varsayılan konum: Masaüstü)."""
         if not hasattr(self, "_last_result"):
             QMessageBox.information(self, "Bilgi", "Henüz analiz yapılmadı.")
             return
 
-        from src.decision_engine import DecisionEngine
-        engine = DecisionEngine()
-        
-        # Ham verileri al
-        decision = self._last_result.get("decision_result", {})
-        contact = self._last_result.get("contact_summary", {})
-        kinematic = self._last_result.get("kinematic_result", {})
-
-        # Masaüstü yolunu bul
         desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
         default_name = os.path.splitext(
-            os.path.basename(self.current_video_path or "report")
+            os.path.basename(self.current_video_path or "rapor")
         )[0] + "_Rapor.pdf"
 
         file_path, _ = QFileDialog.getSaveFileName(
@@ -575,122 +566,12 @@ class MainWindow(QMainWindow):
             os.path.join(desktop_path, default_name),
             "PDF Dosyası (*.pdf);;Tüm Dosyalar (*)",
         )
-
-        if file_path:
-            try:
-                from fpdf import FPDF
-                from datetime import datetime
-                
-                class PDFReport(FPDF):
-                    def header(self):
-                        # Logo/Başlık Arka Planı
-                        self.set_fill_color(22, 33, 62)
-                        self.rect(0, 0, 210, 30, 'F')
-                        
-                        self.set_font('Arial', 'B', 18)
-                        self.set_text_color(255, 255, 255)
-                        self.cell(0, 15, 'TAEKWONDO GHOST HIT DETECTION', 0, 1, 'C')
-                        
-                        self.set_font('Arial', '', 10)
-                        self.set_text_color(200, 200, 200)
-                        self.cell(0, 5, 'Resmi Karar Destek Sistemi Analiz Raporu', 0, 1, 'C')
-                        self.ln(15)
-                        
-                    def footer(self):
-                        self.set_y(-15)
-                        self.set_font('Arial', 'I', 8)
-                        self.set_text_color(128, 128, 128)
-                        self.cell(0, 10, f'Sayfa {self.page_no()} | Tarih: {datetime.now().strftime("%d-%m-%Y %H:%M")}', 0, 0, 'C')
-
-                pdf = PDFReport()
-                pdf.add_page()
-                
-                def safe_text(text):
-                    tr_map = {'ı':'i', 'i':'i', 'ş':'s', 'Ş':'S', 'ğ':'g', 'Ğ':'G', 'ü':'u', 'Ü':'U', 'ö':'o', 'Ö':'O', 'ç':'c', 'Ç':'C'}
-                    clean = "".join([tr_map.get(c, str(c)) for c in str(text)])
-                    return clean.encode('latin-1', 'ignore').decode('latin-1')
-
-                # KARAR KUTUSU
-                decision_label = decision.get('label_tr', 'Bilinmiyor')
-                confidence = decision.get('confidence', 0.0) * 100
-                
-                # Karar rengi, arayüzdeki ile ayni olsun diye karar motorundan alinir
-                hex_color = decision.get('color', '#95A5A6').lstrip('#')
-                r, g, b = (int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
-                pdf.set_fill_color(int(r + (255 - r) * 0.85), int(g + (255 - g) * 0.85), int(b + (255 - b) * 0.85))
-                pdf.set_text_color(int(r * 0.75), int(g * 0.75), int(b * 0.75))
-                
-                pdf.set_font("Arial", 'B', 14)
-                pdf.cell(0, 15, safe_text(f"  Nihai Karar: {decision_label} (Guven Orani: %{confidence:.1f})"), 0, 1, 'L', fill=True)
-                pdf.ln(5)
-
-                # GEREKÇE (REASONING)
-                pdf.set_font("Arial", 'B', 12)
-                pdf.set_text_color(33, 37, 41)
-                pdf.cell(0, 10, "Gerekce:", 0, 1)
-                
-                pdf.set_font("Arial", '', 11)
-                pdf.set_text_color(73, 80, 87)
-                pdf.multi_cell(0, 6, safe_text(decision.get('reasoning', '')))
-                pdf.ln(10)
-                
-                # ÇİZGİ
-                pdf.set_draw_color(206, 212, 218)
-                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-                pdf.ln(10)
-
-                # DETAYLAR BÖLÜMÜ (2 SÜTUN)
-                pdf.set_font("Arial", 'B', 12)
-                pdf.set_text_color(33, 37, 41)
-                pdf.cell(0, 10, "Teknik Analiz Detaylari:", 0, 1)
-                pdf.ln(2)
-                
-                # Temas ve Kinematik tabloları yan yana
-                y_start = pdf.get_y()
-                
-                # Sol Sütun (Temas Analizi)
-                pdf.set_fill_color(248, 249, 250)
-                pdf.rect(10, y_start, 90, 60, 'F')
-                
-                pdf.set_font("Arial", 'B', 10)
-                pdf.set_text_color(22, 33, 62)
-                pdf.set_xy(12, y_start + 2)
-                pdf.cell(86, 8, "Temas Verileri", 0, 1)
-                
-                pdf.set_font("Arial", '', 10)
-                pdf.set_text_color(73, 80, 87)
-                
-                def add_row(x, y, k, v):
-                    pdf.set_xy(x, y)
-                    pdf.set_font("Arial", 'B', 9)
-                    pdf.cell(40, 8, safe_text(k))
-                    pdf.set_font("Arial", '', 9)
-                    pdf.cell(40, 8, safe_text(v))
-                
-                add_row(12, y_start + 12, "Toplam Kare:", f"{contact.get('total_frames', 0)}")
-                add_row(12, y_start + 20, "Temasli Kare:", f"{contact.get('contact_frames', 0)}")
-                add_row(12, y_start + 28, "Yakin Gecis:", f"{contact.get('near_miss_frames', 0)}")
-                add_row(12, y_start + 36, "Maks Cakisma:", f"{contact.get('max_overlap', 0)} px")
-                min_dist = contact.get('min_distance', float('inf'))
-                add_row(12, y_start + 44, "Min Mesafe:", f"{min_dist:.1f} px" if min_dist < 1e6 else "N/A")
-                
-                # Sağ Sütun (Kinematik Analiz)
-                pdf.set_fill_color(248, 249, 250)
-                pdf.rect(110, y_start, 90, 60, 'F')
-                
-                pdf.set_font("Arial", 'B', 10)
-                pdf.set_text_color(22, 33, 62)
-                pdf.set_xy(112, y_start + 2)
-                pdf.cell(86, 8, "Kinematik Verileri", 0, 1)
-                
-                add_row(112, y_start + 12, "Hareket Tipi:", f"{kinematic.get('type', 'N/A').upper()}")
-                add_row(112, y_start + 20, "Maks Ivme:", f"{kinematic.get('max_acceleration', 0):.1f} px/s^2")
-                add_row(112, y_start + 28, "Ivme Tepe Karesi:", f"{kinematic.get('peak_frame', 'N/A')}")
-                add_row(112, y_start + 36, "Varyasyon (CV):", f"{kinematic.get('acceleration_cv', 0):.2f}")
-                add_row(112, y_start + 44, "Net Savrulma:", f"{kinematic.get('net_displacement', 0):.1f} px")
-                
-                pdf.output(file_path)
-                self.status_bar.showMessage(f"PDF Raporu kaydedildi: {file_path}")
-                QMessageBox.information(self, "Başarılı", f"Resmi PDF Raporu Başarıyla Oluşturuldu!\n\n{file_path}")
-            except Exception as e:
-                QMessageBox.critical(self, "Hata", f"PDF oluşturulurken hata meydana geldi:\n{str(e)}")
+        if not file_path:
+            return
+        try:
+            from src.pdf_report import create_pdf_report
+            create_pdf_report(self._last_result, self.current_video_path, file_path)
+            self.status_bar.showMessage(f"PDF raporu kaydedildi: {file_path}")
+            QMessageBox.information(self, "Başarılı", f"PDF raporu oluşturuldu:\n\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"PDF oluşturulurken hata meydana geldi:\n{str(e)}")
