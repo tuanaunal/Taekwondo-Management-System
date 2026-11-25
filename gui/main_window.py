@@ -460,14 +460,8 @@ class MainWindow(QMainWindow):
 
     def _marked_ranges(self):
         """İşaretli kareleri ardışık aralıklara çevirir, ör. [10, 11, 12, 20] -> [(10, 12), (20, 20)]."""
-        frames = sorted(set(self.marked_frames))
-        ranges = []
-        for f in frames:
-            if ranges and f == ranges[-1][1] + 1:
-                ranges[-1] = (ranges[-1][0], f)
-            else:
-                ranges.append((f, f))
-        return ranges or None
+        from src.contact_moment import frames_to_ranges
+        return frames_to_ranges(self.marked_frames) or None
 
     def _update_marks_label(self):
         ranges = self._marked_ranges()

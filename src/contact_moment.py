@@ -33,6 +33,17 @@ METHOD_LABELS_TR = {
 }
 
 
+def frames_to_ranges(frames) -> list:
+    """İşaretli kareleri ardışık aralıklara çevirir, ör. [10, 11, 12, 20] -> [(10, 12), (20, 20)]."""
+    ranges = []
+    for f in sorted(set(int(x) for x in frames)):
+        if ranges and f == ranges[-1][1] + 1:
+            ranges[-1] = (ranges[-1][0], f)
+        else:
+            ranges.append((f, f))
+    return ranges
+
+
 def _distance(a, b) -> float:
     return float(np.hypot(a[0] - b[0], a[1] - b[1]))
 
