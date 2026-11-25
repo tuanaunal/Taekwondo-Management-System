@@ -57,6 +57,9 @@ FEATURE_UNITS_TR = {
     "absolute_swing": "referans px",
     "contact_gap_radii": "baş yarıçapı",
 }
+# Güven seviyesi: kalibre güven (benzer kararların dürüst ölçümdeki doğruluk oranı)
+CONFIDENCE_LEVELS = [(0.75, "yüksek"), (0.60, "orta"), (0.0, "düşük")]
+
 CONTACT_GAP_CAP = 20.0  # Ayak hiç görülemezse mesafe bu değerle sınırlanır (baş yarıçapı)
 REFERENCE_HEAD_RADIUS = 26.0
 
@@ -79,6 +82,26 @@ def load_model(path: str = MODEL_PATH):
         return None
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def calibrated_confidence(probability: float, model: dict):
+    """
+    Modelin olasılığını, eğitimde birini dışarıda bırakarak ölçülen GERÇEK doğruluğa çevirir.
+    Modelin kendi olasılığı (ör. %92) güvenilir değildir: küçük veri setinde aşırı iddialı olabilir.
+    Kalibrasyon tablosu yoksa None döner.
+    """
+    dist = abs(probability - model.get("threshold", 0.5))
+    for b in model.get("kalibrasyon", []):
+        if b["alt"] <= dist < b["ust"] and b["dogruluk"] is not None:
+            return b["dogruluk"]
+    return None
+
+
+def confidence_level(confidence: float) -> str:
+    for limit, name in CONFIDENCE_LEVELS:
+        if confidence >= limit:
+            return name
+    return "düşük"
 
 
 def predict_contact_probability(features: dict, model: dict) -> tuple:
@@ -170,8 +193,13 @@ class DecisionEngine:
             probability, contributions = predict_contact_probability(features, self.model)
             threshold = self.model.get("threshold", 0.5)
             contact_decision = self.CONTACT if probability >= threshold else self.NO_CONTACT
-            confidence = probability if contact_decision == self.CONTACT else 1.0 - probability
+            raw_confidence = probability if contact_decision == self.CONTACT else 1.0 - probability
+            calibrated = calibrated_confidence(probability, self.model)
+            confidence = calibrated if calibrated is not None else raw_confidence
             reasoning = self._reasoning(contact_decision, probability, features, contributions)
+            if calibrated is not None:
+                reasoning += (f" Güven: benzer kararlar, hiç görülmemiş kliplerde %{calibrated * 100:.0f} "
+                              f"oranında doğru çıktı ({confidence_level(calibrated)} güven).")
 
         decision = self._combine_with_sensor(contact_decision, sensor_scored)
         if sensor_scored is not None and contact_decision != self.UNCERTAIN:
@@ -186,6 +214,7 @@ class DecisionEngine:
             "contact_decision": contact_decision,
             "contact_probability": probability,
             "confidence": float(confidence),
+            "confidence_level": confidence_level(confidence) if contact_decision != self.UNCERTAIN else "-",
             "sensor_scored": sensor_scored,
             "reasoning": reasoning,
             "features": features,
@@ -220,7 +249,7 @@ class DecisionEngine:
             "=" * 60,
             "",
             f"  Karar:      {result['indicator']} {result['label_tr']}",
-            f"  Güven:      {result['confidence']:.1%}",
+            f"  Güven:      {result['confidence']:.1%} ({result.get('confidence_level', '-')})",
             "",
             "─" * 60,
             "  GEREKÇE",

@@ -40,6 +40,10 @@ from src.decision_engine import FEATURES, FEATURE_LABELS_TR, MODEL_PATH, extract
 CACHE_PATH = os.path.join(REPORTS_DIR, "ozellikler.csv")
 REGULARIZATION_C = 1.0   # Küçük veri setinde aşırı uyumu sınırlamak için L2 düzenlileştirme
 DECISION_THRESHOLD = 0.5
+# Güven kalibrasyonu: modelin olasılığının karar sınırına (0.5) uzaklığına göre gruplar.
+# Her grupta, birini dışarıda bırakarak yapılan tahminlerin GERÇEK doğruluk oranı ölçülür;
+# arayüzde gösterilen güven bu orandır (modelin kendi iddiası değil).
+CALIBRATION_BINS = [(0.0, 0.10), (0.10, 0.25), (0.25, 0.51)]
 AUGMENT_TAGS = ["flipped", "bright", "dark", "noisy", "blur"]
 
 
@@ -114,6 +118,20 @@ def leave_one_clip_out(rows: list, features: list) -> np.ndarray:
     return probs
 
 
+def calibration_table(rows: list, probs: np.ndarray) -> list:
+    """Birini dışarıda bırakarak elde edilen olasılıklardan güven kalibrasyon tablosu."""
+    y = np.array([r["etiket"] for r in rows])
+    pred = (probs >= DECISION_THRESHOLD).astype(int)
+    dist = np.abs(probs - DECISION_THRESHOLD)
+    table = []
+    for lo, hi in CALIBRATION_BINS:
+        m = (dist >= lo) & (dist < hi)
+        acc = float((pred[m] == y[m]).mean()) if m.any() else None
+        table.append({"alt": lo, "ust": hi, "karar_sayisi": int(m.sum()),
+                      "dogruluk": round(acc, 4) if acc is not None else None})
+    return table
+
+
 def report(rows: list, probs: np.ndarray, title: str):
     y = np.array([r["etiket"] for r in rows])
     pred = (probs >= DECISION_THRESHOLD).astype(int)
@@ -145,17 +163,21 @@ def main():
 
     print("\n  Birini dışarıda bırakarak doğrulama (her klip tüm kopyalarıyla bir kez test):")
     results = {}
+    loo_probs = None
     for name, feats in [("Sadece baş dönüşü", ["rotation"]),
                         ("Sadece burun savrulması", ["absolute_swing"]),
                         ("Baş dönüşü + burun savrulması", ["rotation", "absolute_swing"]),
                         ("Tüm ölçümler (+ ayak-baş mesafesi)", FEATURES)]:
         probs = leave_one_clip_out(rows, feats)
         results[name] = report(rows, probs, name)
+        if feats == FEATURES:
+            loo_probs = probs
 
     # Son model: tüm ölçümler, tüm veri
     X = np.array([[r[k] for k in FEATURES] for r in rows])
     y = np.array([r["etiket"] for r in rows])
-    model = {"features": FEATURES, **fit(X, y), "threshold": DECISION_THRESHOLD}
+    model = {"features": FEATURES, **fit(X, y), "threshold": DECISION_THRESHOLD,
+             "kalibrasyon": calibration_table(rows, loo_probs)}
     loo_o, loo_a = results["Tüm ölçümler (+ ayak-baş mesafesi)"]
     model.update({
         "egitim_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -167,6 +189,12 @@ def main():
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     with open(MODEL_PATH, "w", encoding="utf-8") as f:
         json.dump(model, f, ensure_ascii=False, indent=2)
+
+    print("\n  Güven kalibrasyonu (model olasılığı -> birini dışarıda bırakarak gerçek doğruluk):")
+    for b in model["kalibrasyon"]:
+        acc = f"%{b['dogruluk'] * 100:.0f}" if b["dogruluk"] is not None else "-"
+        print(f"    olasılık %{(0.5 + b['alt']) * 100:.0f}-%{min(100, (0.5 + b['ust']) * 100):.0f}: "
+              f"{b['karar_sayisi']:3d} karar, gerçek doğruluk {acc}")
 
     print("\n  Son model (tüm veriyle eğitildi) ağırlıkları — pozitif = temas lehine:")
     for k, w in zip(FEATURES, model["weights"]):

@@ -58,7 +58,7 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | | **4. Aşama – Karar** | | |
 | 17 | Karar motorunu yeni tanıma göre yazmak (temas var / yok / belirsiz × sensör) | ✅ | 30, 32, 34 |
 | 18 | Elle yazılmış eşikler yerine yorumlanabilir küçük model + doğru değerlendirme *(17 ile birlikte)* | ✅ | 33, 35, 36 |
-| 19 | Gerçek güven değeri ve otomatik gerekçe *(olasılık ve gerekçe 17-18'de eklendi; kalan: güvenin kalibrasyonu)* | | 31 (kısmen) |
+| 19 | Gerçek güven değeri ve otomatik gerekçe *(güven = benzer kararların dürüst ölçümdeki doğruluğu)* | ✅ | 31 |
 | | **5. Aşama – Arayüz ve rapor** | | |
 | 20 | Analizi tek geçişte yapmak | | 39, 40 |
 | 21 | Video ile grafikleri eşzamanlamak | | 41 |

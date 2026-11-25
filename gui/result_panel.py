@@ -209,7 +209,9 @@ class ResultPanel(QWidget):
         self.decision_label.setStyleSheet(
             f"color: {color}; padding: 15px; font-size: 26px; font-weight: 900; background-color: {color}15; border-radius: 8px; border: 1px solid {color}30;"
         )
-        self.confidence_label.setText(f"Güven: {confidence:.1%}")
+        level = decision.get("confidence_level", "")
+        level_txt = f" ({level})" if level and level != "-" else ""
+        self.confidence_label.setText(f"Güven: {confidence:.1%}{level_txt}")
         self.confidence_label.setStyleSheet(f"color: {color};")
         self.reasoning_label.setText(reasoning)
 

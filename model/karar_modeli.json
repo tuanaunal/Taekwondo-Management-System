@@ -21,7 +21,27 @@
   ],
   "bias": 0.006661775404871631,
   "threshold": 0.5,
-  "egitim_tarihi": "2026-11-25 01:32",
+  "kalibrasyon": [
+    {
+      "alt": 0.0,
+      "ust": 0.1,
+      "karar_sayisi": 36,
+      "dogruluk": 0.5278
+    },
+    {
+      "alt": 0.1,
+      "ust": 0.25,
+      "karar_sayisi": 54,
+      "dogruluk": 0.5556
+    },
+    {
+      "alt": 0.25,
+      "ust": 0.51,
+      "karar_sayisi": 30,
+      "dogruluk": 0.5333
+    }
+  ],
+  "egitim_tarihi": "2026-11-25 13:00",
   "egitim_video_sayisi": 120,
   "dogrulama": {
     "yontem": "birini dışarıda bırakarak (klip + tüm kopyaları)",
