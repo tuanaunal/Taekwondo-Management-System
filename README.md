@@ -103,6 +103,7 @@ print(sonuc["decision_result"]["label_tr"], sonuc["decision_result"]["confidence
 |---|---|
 | `python degerlendir.py` | 20 orijinal klipte doğruluğu ölçer; `--tumu` ile 120 videonun tamamında, görüntü koşullarına göre dayanıklılıkla birlikte. Sonuçlar `output/reports/degerlendirme_gecmisi.csv` dosyasına eklenir. *Not: model bu videolarla eğitildiği için buradaki doğruluk iyimserdir; araç dürüst doğruluğu ayrıca yazar.* |
 | `python egit.py` | Ölçümleri çıkarır (~10-15 dk), modeli **birini dışarıda bırakarak** değerlendirir, güven kalibrasyonunu hesaplar ve `model/karar_modeli.json` dosyasına kaydeder. `--onbellek` önceki ölçümleri kullanır. |
+| `python sonuc_raporu.py` | `egit.py`'nin ölçümlerinden dürüst sonuç raporunu (`SONUC_RAPORU.md`) ve grafiklerini (`sonuc/`) üretir: karmaşıklık matrisi, klip klip sonuçlar, hatalar. |
 | `python -m pytest` | 25 otomatik test (~4 sn; YOLO ve video gerektirmez). |
 
 ---
@@ -118,6 +119,10 @@ Veri seti: gerçek müsabaka kayıtlarından ayıklanıp etiketlenen **10 Real H
 | Tüm ölçümler (kullanılan model) | **11/20 (%55)** |
 | Sadece baş dönüşü | 10/20 |
 | Sadece burun savrulması | 11/20 |
+
+Karmaşıklık matrisi, klip klip sonuçlar ve hataların analizi: **[SONUC_RAPORU.md](SONUC_RAPORU.md)**
+
+![Karmaşıklık matrisi](sonuc/karmasiklik_matrisi_20.png)
 
 **Temel bulgular** (ayrıntılar: [YOL_HARITASI.md](YOL_HARITASI.md)):
 
@@ -138,6 +143,7 @@ Veri seti: gerçek müsabaka kayıtlarından ayıklanıp etiketlenen **10 Real H
 main.py              Giriş noktası: arayüz veya komut satırı analizi
 degerlendir.py       Doğruluk ölçümü
 egit.py              Karar modelinin eğitimi ve dürüst değerlendirmesi
+sonuc_raporu.py      Sonuç raporu üretici (SONUC_RAPORU.md + sonuc/ grafikleri)
 augment.py           Veri çoğaltma (görüntü işleme)
 src/                 Analiz modülleri (algılama, temas anı, baş tepkisi, karar, PDF rapor)
 gui/                 PyQt5 arayüzü

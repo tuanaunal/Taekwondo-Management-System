@@ -68,7 +68,7 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | | **6. Aşama – Kalite ve dokümantasyon** | | |
 | 25 | Otomatik testler *(25 test, ~4 sn; `python -m pytest`)* | ✅ | 48 |
 | 26 | README'yi yeniden yazmak *(Türkçe, kodla uyumlu, dürüst sonuçlar; model yolu sabitlendi)* | ✅ | 47, 49, 51 |
-| 27 | Sonuç raporu (doğruluk, karmaşıklık matrisi, hatalar) | | 50 |
+| 27 | Sonuç raporu (doğruluk, karmaşıklık matrisi, hatalar) → [SONUC_RAPORU.md](SONUC_RAPORU.md) | ✅ | 50 |
 
 ## Denenip vazgeçilenler
 
