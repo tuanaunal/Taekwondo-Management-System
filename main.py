@@ -38,7 +38,8 @@ from src.head_response import compute_head_response
 
 
 def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True,
-                  contact_frame: int = None, sensor_scored: bool = None) -> dict:
+                  contact_frame: int = None, sensor_scored: bool = None,
+                  contact_ranges: list = None) -> dict:
     """
     Tek bir video dosyasini uctan uca analiz eder.
 
@@ -50,6 +51,10 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
         Ayrintili cikti yazdir.
     save_graph : bool
         Ivme grafigini output/graphs klasorune kaydet (toplu testte kapatilir).
+    contact_ranges : list of (int, int), optional
+        Kullanicinin isaretledigi vurus kare araliklari, orn. [(11, 13), (17, 19)].
+        Bir klipte birden cok vurus ani olabilir; olcumler tum araliklara bakar ve en buyuk
+        bas tepkisini kullanir. Verilirse contact_frame ilk araligin ortasi kabul edilir.
     contact_frame : int, optional
         Kullanicinin (orn. hakemin) isaretledigi, sensorun puan verdigi kare.
         Verilmezse temas ani otomatik bulunur.
@@ -203,6 +208,12 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
         print(f"  Toplam islenen kare: {frame_idx}")
 
     # -- Temas Ani --
+    range_frames = None
+    if contact_ranges:
+        range_frames = [f for a, b in contact_ranges for f in range(int(a), int(b) + 1)]
+        if contact_frame is None:
+            a, b = contact_ranges[0]
+            contact_frame = (int(a) + int(b)) // 2
     contact_moment = find_contact_moment(moment_features, info["fps"], user_frame=contact_frame)
     if verbose:
         if contact_moment["frame"] is None:
@@ -223,7 +234,8 @@ def analyze_video(video_path: str, verbose: bool = True, save_graph: bool = True
     # -- Bas Tepkisi (govdeye gore savrulma, bas donusu) --
     head_response = compute_head_response(moment_features, info["fps"],
                                           anchor_frame=analysis_anchor,
-                                          target=analysis_target)
+                                          target=analysis_target,
+                                          anchor_frames=range_frames if reliable_moment else None)
     if verbose:
         hr = head_response["max"]
         print(f"  Bas tepkisi: govdeye gore savrulma {hr['relative_swing']:.1f} px, "

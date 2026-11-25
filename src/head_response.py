@@ -28,6 +28,7 @@ WINDOW_HALF_SEC = 0.33     # Değişimin ölçüldüğü pencerenin yarı süres
 SMOOTH_WINDOW_SEC = 0.2    # Savitzky–Golay yumuşatma penceresi (kinematics.py ile aynı)
 MAX_GAP_SEC = 0.17         # Bu süreden kısa eksiklikler ara değerle doldurulur (30 FPS'te 5 kare)
 ANCHOR_TOLERANCE_SEC = 0.17  # Temas anı tahmini ± bu kadar kayabilir (30 FPS'te 5 kare)
+RANGE_TOLERANCE_SEC = 0.07   # Kullanıcının verdiği kare aralıkları ± bu kadar genişletilir (30 FPS'te 2 kare)
 
 
 def _fill_and_smooth(series: np.ndarray, fps: float) -> np.ndarray:
@@ -104,11 +105,15 @@ def athlete_series(frame_features: list, color: str) -> dict:
 
 
 def compute_head_response(frame_features: list, fps: float,
-                          anchor_frame: int = None, target: str = None) -> dict:
+                          anchor_frame: int = None, target: str = None,
+                          anchor_frames=None) -> dict:
     """
     Her iki sporcu için baş tepkisi ölçümlerini hesaplar.
 
-    anchor_frame: temas anı (verilirse ölçümler bu anın çevresinden alınır)
+    anchor_frame: temas anı (verilirse ölçümler bu anın ±0.17 sn çevresinden alınır)
+    anchor_frames: kullanıcının işaretlediği vuruş karelerinin tamamı (bir veya birden çok aralık).
+        Verilirse ölçümler bu karelerin (±0.07 sn) çevresinden alınır ve aday anlar arasından
+        EN BÜYÜK baş tepkisi kullanılır: gerçek darbe varsa en güçlü tepkiyi o verir.
     target: başı hedef alınan sporcu ('red' / 'blue'); verilirse 'max' onun değerleridir
 
     Returns
@@ -127,7 +132,10 @@ def compute_head_response(frame_features: list, fps: float,
     """
     half = max(1, int(round(WINDOW_HALF_SEC * fps)))
     centers = None
-    if anchor_frame is not None:
+    if anchor_frames:
+        tol = max(0, int(round(RANGE_TOLERANCE_SEC * fps)))
+        centers = sorted({int(f) + d for f in anchor_frames for d in range(-tol, tol + 1)})
+    elif anchor_frame is not None:
         tol = max(0, int(round(ANCHOR_TOLERANCE_SEC * fps)))
         centers = range(int(anchor_frame) - tol, int(anchor_frame) + tol + 1)
     result = {}

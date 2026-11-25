@@ -39,3 +39,7 @@ Dataset/Ghost_Hit/*.mp4
 Dataset/Real_Hit/*.mp4
 *.mp4
 yolov8*.pt
+
+# Etiketleme icin uretilen kare goruntuleri (yeniden uretilebilir, buyuk)
+etiketleme/kareler/
+etiketleme/kontrol/

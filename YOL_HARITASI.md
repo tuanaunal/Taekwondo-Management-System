@@ -18,6 +18,16 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 
 6. **Dürüst doğruluk şans düzeyine yakın.** Karar modeli her klip (tüm kopyalarıyla) bir kez dışarıda tutularak değerlendirildiğinde: tüm ölçümlerle 11/20 (%55), sadece baş dönüşüyle 10/20, sadece burun savrulmasıyla 11/20. Önceki adımlardaki 11-13/20 sonuçları, eşikleri aynı veriye göre ayarlanmış kararlardan geliyordu. Mevcut ölçümler 20 klipte belirgin bir eğilim gösterse de (AUC %67-69), bu eğilim görülmemiş kliplere genellenecek kadar güçlü değil. En olası nedenler: veri azlığı (10'a 10 klip), otomatik temas anının belirsizliği ve iki boyutlu görüntünün sınırları. *(Adım 17-18)*
 
+7. **Darbe karesi bilinse bile genelleme artmadı; hatta zayıfladı.** Ölçümler işaretlenmiş darbe karelerine odaklandığında:
+
+   | | Odaksız (klibin tamamı) | Claude'un tahmini kareler | **Kullanıcının işaretlediği kareler** |
+   |---|---|---|---|
+   | Baş dönüşü AUC | %69 | %68 | **%60** |
+   | Burun savrulması AUC | %67 | %70 | **%56** |
+   | Dürüst doğruluk (birini dışarıda bırakarak) | 11/20 | 11/20 | **8/20** |
+
+   Kullanıcının işaretlediği (en güvenilir) anlara odaklanınca ayırt edicilik şans düzeyine yaklaştı. Bu, klibin tamamından ölçülen %67-69'luk eğilimin önemli bir kısmının darbe anının kendisinden değil, klipteki başka hareketlerden (ör. darbe sonrası düşme, sendeleme, başka tekmeler) gelebileceğini düşündürüyor. Ayrıca 9. bulgudaki sorun burada da etkili: sporcular temas anında üst üste bindiği için iskelet noktaları tam o karelerde en güvenilmez halinde. 20 klipte ±%11'lik belirsizlik payı olduğundan 8/20 ile 10/20 arasındaki fark anlamlı değil; ancak hiçbir koşulda belirgin bir başarı görülmedi. *(Ara adım: darbe karesi işaretleme; kareler `etiketleme/darbe_kareleri.csv`)*
+
 **Sonuç:** Kararın ana dayanağı **başın darbeye verdiği fiziksel tepki** (dönüş, gövdeye göre savrulma) olmalı; temas geometrisi sadece destekleyici kanıttır.
 
 ---
