@@ -18,4 +18,6 @@ python deneyler/inspect_video.py
 
 > Not: `analyze_ke.py`, `optimize_ke.py` ve `train_tree.py`, artık kaldırılmış olan `run_batch.py`'nin ürettiği `batch_summary_detailed.csv` dosyasını okur; bu yüzden bugün doğrudan çalışmazlar. Güncel değerlendirme aracı proje kökündeki `degerlendir.py`'dir.
 
-> Not: Eşik ayarlama betikleri, eşikleri test edilen verinin kendisi üzerinde ayarlar (ezberleme riski). Doğru değerlendirme yöntemi yol haritasının 18. adımında kurulacaktır.
+> Not: Eşik ayarlama betikleri, eşikleri test edilen verinin kendisi üzerinde ayarlar (ezberleme riski). Doğru değerlendirme yöntemi (birini dışarıda bırakarak) proje kökündeki `egit.py` ve `sonuc_raporu.py` ile yapılır.
+
+> Not: Betiklerin çoğu, ana koddan kaldırılmış eski yapıları kullanır (HSV kask aralıkları, morfoloji/kontur ayarları, `src/tracker.py` vb.). Bu yüzden güncel kodla doğrudan çalışmazlar; yalnızca geliştirme geçmişini belgelemek için saklanır.
