@@ -4,8 +4,9 @@ sonuc_raporu.py — Sonuç Raporu Üretici
 egit.py'nin çıkardığı ölçümlerden (output/reports/ozellikler.csv) sistemin DÜRÜST
 sonuçlarını hesaplar ve sunumda kullanılacak tek bir rapor üretir:
 
-  - SONUC_RAPORU.md        : doğruluk, karmaşıklık matrisi, klip klip sonuçlar, hatalar
-  - sonuc/*.png            : karmaşıklık matrisi, klip olasılıkları, doğruluk geçmişi
+  - SONUC_RAPORU.md        : doğruluk, karmaşıklık matrisi, dayanıklılık, hatalar
+Rapor ve grafikler bilerek klip sayısı içermez; oranlar yüzde olarak verilir.
+  - sonuc/*.png            : karmaşıklık matrisi (yüzde), doğruluk geçmişi
 
 Tüm tahminler "birini dışarıda bırakarak" elde edilir: her klip tüm çoğaltılmış
 kopyalarıyla birlikte bir kez dışarıda tutulur, model kalan kliplerle eğitilir.
@@ -98,61 +99,30 @@ def style_axes(ax):
 
 
 def plot_confusion(cm: np.ndarray, cols: list, path: str, title: str):
+    """Satır yüzdeli karmaşıklık matrisi: her gerçek sınıfın kararlara dağılımı (klip sayısı gösterilmez)."""
+    rows = cm.sum(axis=1, keepdims=True)
+    pct = np.where(rows > 0, cm / np.maximum(rows, 1) * 100, 0)
     fig, ax = plt.subplots(figsize=(5.6, 3.2), dpi=160)
     fig.patch.set_facecolor(SURFACE)
-    vmax = max(cm.max(), 1)
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            v = cm[i, j]
-            color = SEQ[int(round(v / vmax * (len(SEQ) - 1)))]
+    for i in range(pct.shape[0]):
+        for j in range(pct.shape[1]):
+            v = pct[i, j]
+            color = SEQ[int(round(v / 100 * (len(SEQ) - 1)))]
             ax.add_patch(plt.Rectangle((j + 0.02, i + 0.02), 0.96, 0.96, color=color, lw=0))
-            ax.text(j + 0.5, i + 0.5, str(v), ha="center", va="center", fontsize=16,
-                    color="#ffffff" if v / vmax > 0.55 else INK, fontweight="bold")
-    ax.set_xlim(0, cm.shape[1])
-    ax.set_ylim(cm.shape[0], 0)
-    ax.set_xticks(np.arange(cm.shape[1]) + 0.5, cols)
+            ax.text(j + 0.5, i + 0.5, f"%{v:.0f}", ha="center", va="center", fontsize=16,
+                    color="#ffffff" if v > 55 else INK, fontweight="bold")
+    ax.set_xlim(0, pct.shape[1])
+    ax.set_ylim(pct.shape[0], 0)
+    ax.set_xticks(np.arange(pct.shape[1]) + 0.5, cols)
     ax.set_yticks([0.5, 1.5], ["Ghost Hit\n(gerçekte temas yok)", "Real Hit\n(gerçekte temas var)"])
     ax.xaxis.set_ticks_position("top")
     ax.tick_params(length=0, colors=INK, labelsize=9)
     for s in ax.spines.values():
         s.set_visible(False)
     ax.set_title(title, fontsize=10, color=INK, pad=28, loc="left")
-    fig.text(0.5, 0.02, "Sütun: sistemin kararı   ·   Satır: gerçek durum", ha="center",
+    fig.text(0.5, 0.02, "Sütun: sistemin kararı  ·  Satır: gerçek durum  ·  her satır %100", ha="center",
              fontsize=8, color=INK2)
     fig.tight_layout(rect=(0, 0.05, 1, 1))
-    fig.savefig(path, facecolor=SURFACE)
-    plt.close(fig)
-
-
-def plot_clip_probs(clips: list, path: str):
-    fig, ax = plt.subplots(figsize=(7.2, 3.4), dpi=160)
-    fig.patch.set_facecolor(SURFACE)
-    style_axes(ax)
-    for idx, c in enumerate(clips):
-        col = C_REAL if c["etiket"] == 1 else C_GHOST
-        ax.plot([idx, idx], [min(c["kopya_olasiliklari"]), max(c["kopya_olasiliklari"])],
-                color=col, lw=2, alpha=0.35, solid_capstyle="round")
-        ax.scatter(idx, c["olasilik"], s=46, color=col, edgecolor=SURFACE, linewidth=2, zorder=3)
-        if not c["dogru"]:
-            ax.scatter(idx, c["olasilik"], s=150, facecolor="none", edgecolor=INK, linewidth=1.2, zorder=4)
-    ax.axhline(DECISION_THRESHOLD, color=INK2, lw=1, ls=(0, (4, 3)))
-    ax.text(len(clips) - 0.4, DECISION_THRESHOLD + 0.015, "karar sınırı", fontsize=8,
-            color=INK2, ha="right", va="bottom")
-    ax.set_xticks(range(len(clips)), [c["klip"] for c in clips], rotation=60, fontsize=8)
-    ax.set_ylabel("Model: \"temas var\" olasılığı", fontsize=9, color=INK2)
-    ax.set_ylim(0, 1)
-    ax.grid(axis="y", color=GRID, lw=0.6)
-    ax.set_axisbelow(True)
-    from matplotlib.lines import Line2D
-    handles = [Line2D([], [], marker="o", ls="", color=C_GHOST, label="Ghost Hit (doğrusu: altta)"),
-               Line2D([], [], marker="o", ls="", color=C_REAL, label="Real Hit (doğrusu: üstte)"),
-               Line2D([], [], marker="o", ls="", markerfacecolor="none", markeredgecolor=INK,
-                      markersize=10, label="Yanlış karar")]
-    ax.legend(handles=handles, fontsize=8, frameon=False, loc="upper left", ncol=3,
-              bbox_to_anchor=(0, 1.13))
-    fig.text(0.01, 0.01, "Nokta: orijinal klip · Soluk çizgi: aynı klibin 6 kopyasındaki olasılık aralığı",
-             fontsize=7.5, color=INK2)
-    fig.tight_layout(rect=(0, 0.04, 1, 1))
     fig.savefig(path, facecolor=SURFACE)
     plt.close(fig)
 
@@ -172,13 +142,13 @@ def plot_history(path: str, honest_acc: float):
     ax.plot(x, y, color=C_REAL, lw=2, marker="o", markersize=5, markeredgecolor=SURFACE)
     ax.scatter([len(rows)], [honest_acc * 100], s=60, color=INK, zorder=3)
     ax.annotate(f"Dürüst ölçüm\n%{honest_acc * 100:.0f}", (len(rows), honest_acc * 100),
-                xytext=(-10, 12), textcoords="offset points", fontsize=8, color=INK, ha="right")
+                xytext=(-14, 0), textcoords="offset points", fontsize=8, color=INK, ha="right", va="center")
     ax.axhline(50, color=INK2, lw=1, ls=(0, (4, 3)))
     ax.text(0, 51.5, "şans düzeyi (%50)", fontsize=8, color=INK2)
     labels = [r["not"].split(":")[0].replace("adim", "Adım").replace("baslangic (Adım 3)", "Başl.")
               .replace("baslangic (adim 3)", "Başl.") for r in rows] + ["Dürüst"]
     ax.set_xticks(list(x) + [len(rows)], labels, rotation=60, fontsize=7.5)
-    ax.set_ylabel("20 orijinal klipte doğruluk (%)", fontsize=9, color=INK2)
+    ax.set_ylabel("Orijinal kliplerde doğruluk (%)", fontsize=9, color=INK2)
     ax.set_ylim(30, 80)
     ax.grid(axis="y", color=GRID, lw=0.6)
     ax.set_axisbelow(True)
@@ -204,6 +174,9 @@ def main():
         r["gercek"] = YES if r["etiket"] == 1 else NO
         r["dogru"] = r["karar"] == r["gercek"]
 
+    def pct(k, n):
+        return k / n * 100 if n else 0.0
+
     orig = [r for r in rows if r["orijinal"] == 1]
     n_o, k_o = len(orig), sum(r["dogru"] for r in orig)
     n_a, k_a = len(rows), sum(r["dogru"] for r in rows)
@@ -216,193 +189,158 @@ def main():
     def cmatrix(rs):
         m = np.zeros((2, len(used_cols)), dtype=int)
         for r in rs:
-            m[r["etiket"] == 1 and 1 or 0, used_cols.index(r["karar"])] += 1
+            m[1 if r["etiket"] == 1 else 0, used_cols.index(r["karar"])] += 1
         return m
     cm_o, cm_a = cmatrix(orig), cmatrix(rows)
 
-    # Klip bazında tablo
+    # Kopyalar arası tutarlılık
     clips = []
-    for r in sorted(orig, key=lambda r: (r["etiket"], r["klip"])):
+    for r in orig:
         copies = [x for x in rows if x["klip"] == r["klip"]]
-        clips.append({**r, "kopya_olasiliklari": [x["olasilik"] for x in copies],
-                      "kopya_dogru": sum(x["dogru"] for x in copies), "kopya_sayisi": len(copies)})
+        clips.append(sum(x["dogru"] for x in copies) in (0, len(copies)))
+    stable_pct = pct(sum(clips), len(clips))
 
     # Varyantlara göre dayanıklılık
     by_var = []
     for v in ["orijinal"] + AUGMENT_TAGS:
         rs = [r for r in rows if r["varyant"] == v]
         if rs:
-            by_var.append((VARIANT_TR[v], sum(r["dogru"] for r in rs), len(rs)))
+            by_var.append((VARIANT_TR[v], pct(sum(r["dogru"] for r in rs), len(rs))))
 
-    # Ölçümlerin ayırt ediciliği (orijinal 20)
     feat_stats = []
     for k in FEATURES:
         pos = [r[k] for r in orig if r["etiket"] == 1]
         neg = [r[k] for r in orig if r["etiket"] == 0]
-        a = auc(pos, neg)
-        feat_stats.append((FEATURE_LABELS_TR[k], np.median(neg), np.median(pos), a))
+        feat_stats.append((FEATURE_LABELS_TR[k], np.median(neg), np.median(pos), auc(pos, neg)))
 
     calib = calibration_table(rows, probs)
 
-    # Grafikler
+    # Grafikler (klip sayısı içermez)
     os.makedirs(OUT_DIR, exist_ok=True)
-    plot_confusion(cm_o, used_cols, os.path.join(OUT_DIR, "karmasiklik_matrisi_20.png"),
-                   f"20 orijinal klip — {k_o}/{n_o} doğru (görülmemiş klip testi)")
-    plot_confusion(cm_a, used_cols, os.path.join(OUT_DIR, "karmasiklik_matrisi_120.png"),
-                   f"120 video (çoğaltılmışlar dahil) — {k_a}/{n_a} doğru")
-    plot_clip_probs(clips, os.path.join(OUT_DIR, "klip_olasiliklari.png"))
+    for old in ("karmasiklik_matrisi_20.png", "karmasiklik_matrisi_120.png", "klip_olasiliklari.png"):
+        if os.path.exists(os.path.join(OUT_DIR, old)):
+            os.remove(os.path.join(OUT_DIR, old))
+    plot_confusion(cm_o, used_cols, os.path.join(OUT_DIR, "karmasiklik_matrisi.png"),
+                   f"Orijinal klipler — doğruluk %{pct(k_o, n_o):.0f} (görülmemiş klip testi)")
     has_hist = plot_history(os.path.join(OUT_DIR, "dogruluk_gecmisi.png"), k_o / n_o)
 
-    gh_caught = cm_o[0, used_cols.index(NO)]
-    rh_cancel = cm_o[1, used_cols.index(NO)]
-    rh_ok = cm_o[1, used_cols.index(YES)]
-    gh_missed = cm_o[0, used_cols.index(YES)]
+    gh, rh = cm_o[0].sum(), cm_o[1].sum()
+    gh_caught = pct(cm_o[0, used_cols.index(NO)], gh)
+    gh_missed = pct(cm_o[0, used_cols.index(YES)], gh)
+    rh_ok = pct(cm_o[1, used_cols.index(YES)], rh)
+    rh_cancel = pct(cm_o[1, used_cols.index(NO)], rh)
 
-    wrong = [c for c in clips if not c["dogru"]]
     L = []
     w = L.append
     w("# Sonuç Raporu\n")
-    w(f"*Üretildi: {datetime.now().strftime('%Y-%m-%d %H:%M')} · `python sonuc_raporu.py` · "
-      f"ölçümler: `{os.path.relpath(CACHE_PATH, PROJECT_ROOT)}`*\n")
+    w(f"*Üretildi: {datetime.now().strftime('%Y-%m-%d %H:%M')} · `python sonuc_raporu.py`*\n")
     w("Bu rapor, sistemin **hiç görmediği kliplerdeki** başarısını özetler. Her klip, tüm çoğaltılmış "
-      "kopyalarıyla birlikte bir kez dışarıda tutulmuş; karar modeli kalan 19 klip ile eğitilip "
-      "dışarıdaki klipte test edilmiştir (birini dışarıda bırakarak doğrulama). Eşikler test verisine "
-      "göre ayarlanmamıştır.\n")
+      "kopyalarıyla birlikte bir kez dışarıda tutulmuş; karar modeli kalan kliplerle eğitilip dışarıdaki "
+      "klipte test edilmiştir (birini dışarıda bırakarak doğrulama). Eşikler test verisine göre ayarlanmamıştır.\n")
+    w("**Veri hakkında:** Bu alanda kamuya açık, etiketli bir veri seti bulunmuyor ve müsabaka görüntülerinin "
+      "tamamı paylaşılmadığı için büyük bir veri seti oluşturulamadı. Çalışma az sayıda etiketli klip üzerinde "
+      "yapıldı; klipler görüntü işleme teknikleriyle çoğaltıldı. Bu yüzden aşağıdaki oranların belirsizlik payı büyüktür.\n")
     w("---\n")
     w("## 1. Özet\n")
     w("| | Sonuç |\n|---|---|")
-    w(f"| **Doğruluk (20 orijinal klip)** | **{k_o}/{n_o} (%{k_o / n_o * 100:.0f})** |")
+    w(f"| **Doğruluk (orijinal klipler)** | **%{pct(k_o, n_o):.0f}** |")
     w(f"| %95 güven aralığı | %{lo * 100:.0f} – %{hi * 100:.0f} |")
     w(f"| Şans düzeyinde bir sistemin bu kadar veya daha iyi sonuç alma olasılığı | %{p_chance * 100:.0f} |")
-    w(f"| Doğruluk (120 video, çoğaltılmışlar dahil) | {k_a}/{n_a} (%{k_a / n_a * 100:.0f}) |")
-    w(f"| Ghost Hit yakalama (10 klipten) | {gh_caught}/{sum(cm_o[0])} |")
-    w(f"| Real Hit'i doğru onaylama (10 klipten) | {rh_ok}/{sum(cm_o[1])} |")
+    w(f"| Doğruluk (çoğaltılmış videolar dahil) | %{pct(k_a, n_a):.0f} |")
+    w(f"| Ghost Hit yakalama oranı | %{gh_caught:.0f} |")
+    w(f"| Gerçek vuruşu doğru onaylama oranı | %{rh_ok:.0f} |")
     w("")
-    w(f"**Yorum:** {k_o}/{n_o} sonucu şans düzeyinden istatistiksel olarak ayırt edilemiyor "
-      f"(yazı-tura atan bir sistem de %{p_chance * 100:.0f} olasılıkla bu sonucu alır). Mevcut ölçümler "
-      "20 klipte Real Hit ile Ghost Hit'i güvenilir biçimde ayıramıyor. Sistem bu yüzden her kararı "
-      "kalibre edilmiş, çoğunlukla **düşük** bir güvenle verir ve nihai kararı hakeme bırakır.\n")
+    w(f"**Yorum:** %{pct(k_o, n_o):.0f}'lik doğruluk şans düzeyinden istatistiksel olarak ayırt edilemiyor "
+      f"(yazı-tura atan bir sistem de %{p_chance * 100:.0f} olasılıkla bu sonucu alır). Mevcut ölçümler, eldeki "
+      "az veriyle Real Hit ile Ghost Hit'i güvenilir biçimde ayıramıyor. Sistem bu yüzden her kararı kalibre "
+      "edilmiş, çoğunlukla **düşük** bir güvenle verir ve nihai kararı hakeme bırakır.\n")
     w("---\n")
     w("## 2. Karmaşıklık matrisi\n")
     w("Veri setindeki tüm klipler sensörün puan verdiği anlardır. Bu yüzden \"temas yok\" kararı "
-      "**Ghost Hit (puan hatalı)**, \"temas var\" kararı **puan geçerli** anlamına gelir.\n")
+      "**Ghost Hit (puan hatalı)**, \"temas var\" kararı **puan geçerli** anlamına gelir. Her satır, o gerçek "
+      "durumdaki kliplerin kararlara yüzde dağılımıdır.\n")
     hdr = "| Gerçek durum ↓ / Sistem kararı → | " + " | ".join(used_cols) + " |"
     w(hdr)
     w("|---|" + "---|" * len(used_cols))
-    w("| **Ghost Hit** (temas yok) | " + " | ".join(str(v) for v in cm_o[0]) + " |")
-    w("| **Real Hit** (temas var) | " + " | ".join(str(v) for v in cm_o[1]) + " |")
+    for i, name in ((0, "**Ghost Hit** (temas yok)"), (1, "**Real Hit** (temas var)")):
+        tot = cm_o[i].sum()
+        w(f"| {name} | " + " | ".join(f"%{pct(v, tot):.0f}" for v in cm_o[i]) + " |")
     w("")
-    w("![Karmaşıklık matrisi — 20 orijinal klip](sonuc/karmasiklik_matrisi_20.png)\n")
-    w(f"- **Yakalanan Ghost Hit:** {gh_caught} — sistem hatalı puanı doğru tespit etti.")
-    w(f"- **Kaçırılan Ghost Hit:** {gh_missed} — hatalı puan geçerli sayıldı.")
-    w(f"- **Haksız iptal önerisi:** {rh_cancel} — gerçek bir vuruş için \"puan hatalı\" denildi. "
+    w("![Karmaşıklık matrisi](sonuc/karmasiklik_matrisi.png)\n")
+    w(f"- **Yakalanan Ghost Hit:** %{gh_caught:.0f} — sistem hatalı puanı doğru tespit etti.")
+    w(f"- **Kaçırılan Ghost Hit:** %{gh_missed:.0f} — hatalı puan geçerli sayıldı.")
+    w(f"- **Haksız iptal önerisi:** gerçek vuruşların %{rh_cancel:.0f}'i için \"puan hatalı\" denildi. "
       "Sahada en maliyetli hata budur; bu yüzden sistemin kararı tek başına puan iptali için kullanılmamalıdır.")
-    w(f"- **Doğru onay:** {rh_ok} — gerçek vuruşun puanı onaylandı.\n")
-    w("120 videonun tamamında (her klibin 5 çoğaltılmış kopyası dahil):\n")
-    w(hdr)
-    w("|---|" + "---|" * len(used_cols))
-    w("| **Ghost Hit** | " + " | ".join(str(v) for v in cm_a[0]) + " |")
-    w("| **Real Hit** | " + " | ".join(str(v) for v in cm_a[1]) + " |")
-    w("")
+    w(f"- **Doğru onay:** gerçek vuruşların %{rh_ok:.0f}'i onaylandı.\n")
     w("---\n")
-    w("## 3. Klip klip sonuçlar\n")
-    w("![Klip olasılıkları](sonuc/klip_olasiliklari.png)\n")
-    w("| Klip | Gerçek | Karar | Olasılık | Doğru mu | 6 kopyadan doğru | Baş görünürlüğü | "
-      "Baş dönüşü | Burun savrulması | Ayak-baş mesafesi (baş yarıçapı) |")
-    w("|---|---|---|---|---|---|---|---|---|---|")
-    for c in clips:
-        w(f"| {c['klip']} | {c['gercek']} | {c['karar']} | %{c['olasilik'] * 100:.1f} |"
-          f"{'✅' if c['dogru'] else '❌'} | {c['kopya_dogru']}/{c['kopya_sayisi']} | "
-          f"%{c['kapsama'] * 100:.0f} | {c['rotation']:.2f} | {c['absolute_swing']:.0f} | "
-          f"{c['contact_gap_radii']:.1f} |")
+    w("## 3. Görüntü koşullarına dayanıklılık\n")
+    w("| Koşul | Doğruluk |\n|---|---|")
+    for name, a in by_var:
+        w(f"| {name} | %{a:.0f} |")
     w("")
-    stable = sum(1 for c in clips if c["kopya_dogru"] in (0, c["kopya_sayisi"]))
-    accs = [k / n for _, k, n in by_var]
-    w(f"**Kararların tutarlılığı:** {stable}/{len(clips)} klipte sistem 6 kopyanın hepsinde aynı "
-      f"doğrulukta karar verdi (hepsi doğru veya hepsi yanlış); diğer {len(clips) - stable} klipte "
-      "karar kopyadan kopyaya değişiyor (grafikteki uzun soluk çizgiler). Buna karşın her "
-      f"görüntü koşulundaki toplam doğruluk benzer (%{min(accs) * 100:.0f}–%{max(accs) * 100:.0f}, "
-      "bkz. 4. bölüm): görüntü koşulları başarıyı belirli bir yöne kaydırmıyor; hatalar görüntü "
-      "kalitesinden çok ölçümlerin kendisinden geliyor.\n")
+    w(f"Kliplerin %{stable_pct:.0f}'inde sistem tüm kopyalarda aynı doğrulukta karar verdi; diğerlerinde karar "
+      "kopyadan kopyaya değişti. Her koşuldaki toplam doğruluk ise benzer: görüntü koşulları başarıyı belirli "
+      "bir yöne kaydırmıyor, hatalar görüntü kalitesinden çok ölçümlerin kendisinden geliyor.\n")
     w("---\n")
-    w("## 4. Görüntü koşullarına dayanıklılık\n")
-    w("| Koşul | Doğru | Doğruluk |\n|---|---|---|")
-    for name, k, n in by_var:
-        w(f"| {name} | {k}/{n} | %{k / n * 100:.0f} |")
-    w("")
-    w("---\n")
-    w("## 5. Ölçümlerin ayırt ediciliği\n")
-    w("AUC: rastgele seçilen bir Real Hit klibinin, rastgele bir Ghost Hit klibinden daha yüksek değer "
-      "alma olasılığı (%50 = şans, %100 = kusursuz ayrım). Ayak-baş mesafesinde küçük değer temas lehinedir, "
-      "bu yüzden %50'nin altı beklenen yöndür.\n")
-    w("| Ölçüm | Ghost Hit ortanca | Real Hit ortanca | AUC (20 klip) |\n|---|---|---|---|")
+    w("## 4. Ölçümlerin ayırt ediciliği\n")
+    w("AUC: rastgele seçilen bir Real Hit klibinin, rastgele bir Ghost Hit klibinden daha yüksek değer alma "
+      "olasılığı (%50 = şans, %100 = kusursuz ayrım). Ayak-baş mesafesinde küçük değer temas lehinedir, bu yüzden "
+      "%50'nin altı beklenen yöndür.\n")
+    w("| Ölçüm | Ghost Hit ortanca | Real Hit ortanca | AUC |\n|---|---|---|---|")
     for name, mg, mr, a in feat_stats:
         w(f"| {name} | {mg:.2f} | {mr:.2f} | %{a * 100:.0f} |")
     w("")
-    w("Baş dönüşü ve burun savrulması 20 klipte bir eğilim gösteriyor; ancak bu eğilim, klip dışarıda "
-      "tutulduğunda doğru tahmine dönüşecek kadar güçlü değil (bkz. Özet).\n")
+    w("Baş dönüşü ve burun savrulması bir eğilim gösteriyor; ancak bu eğilim, klip dışarıda tutulduğunda doğru "
+      "tahmine dönüşecek kadar güçlü değil.\n")
     w("---\n")
-    w("## 6. Güven kalibrasyonu\n")
-    w("Arayüzde gösterilen güven, modelin kendi olasılığı değil, benzer olasılıktaki kararların bu "
-      "dürüst testte **gerçekten doğru çıkma oranıdır**.\n")
-    w("| Model olasılığı (karar sınırından uzaklık) | Karar sayısı (120 video) | Gerçek doğruluk |\n|---|---|---|")
+    w("## 5. Güven kalibrasyonu\n")
+    w("Arayüzde gösterilen güven, modelin kendi olasılığı değil, benzer olasılıktaki kararların bu dürüst testte "
+      "**gerçekten doğru çıkma oranıdır**.\n")
+    w("| Model olasılığı (karar sınırından uzaklık) | Gerçek doğruluk |\n|---|---|")
     for b in calib:
         acc = f"%{b['dogruluk'] * 100:.0f}" if b["dogruluk"] is not None else "–"
-        w(f"| %{(0.5 + b['alt']) * 100:.0f} – %{min(100, (0.5 + b['ust']) * 100):.0f} | "
-          f"{b['karar_sayisi']} | {acc} |")
+        w(f"| %{(0.5 + b['alt']) * 100:.0f} – %{min(100, (0.5 + b['ust']) * 100):.0f} | {acc} |")
     w("")
-    w("Model kendinden daha emin olduğunda bile gerçek doğruluk belirgin biçimde artmıyor; bu yüzden "
-      "sistem güveni abartmıyor, çoğu kararı \"düşük güven\" olarak işaretliyor.\n")
+    w("Model kendinden daha emin olduğunda bile gerçek doğruluk belirgin biçimde artmıyor; bu yüzden sistem "
+      "güveni abartmıyor, çoğu kararı \"düşük güven\" olarak işaretliyor.\n")
     w("---\n")
-    w("## 7. Sistem nerede yanılıyor?\n")
-    w(f"Yanlış karar verilen {len(wrong)} klip: " + ", ".join(
-        f"**{c['klip']}** ({c['gercek'].lower()} → {c['karar'].lower()}, %{c['olasilik'] * 100:.0f})"
-        for c in wrong) + ".\n")
-    w("Bu hataların ortak nedenleri (geliştirme sırasında yapılan testlerle; ayrıntılar "
+    w("## 6. Sistem nerede yanılıyor?\n")
+    w("Hataların ortak nedenleri (geliştirme sırasında yapılan testlerle; ayrıntılar "
       "[YOL_HARITASI.md](YOL_HARITASI.md)):\n")
-    w("1. **Temas anında iskelet noktaları en güvenilmez halinde.** Sporcular temas anında üst üste "
-      "biniyor; poz modeli yüksek tekmede kafaya uzanan bacağı çoğu zaman yakalayamıyor (Bulgu 2). "
-      "Daha büyük poz modeli de bunu çözmedi.")
-    w("2. **İki boyutlu görüntüde \"başın hemen yanından geçen\" tekme ile \"başa değen\" tekme aynı "
-      "görünüyor.** Ghost Hit kliplerinde de tekme başa çok yakın geçiyor; ayak-baş mesafesi bu yüzden "
-      "ayırt edici değil (Bulgu 3).")
-    w("3. **Başın tepkisi tek başına yetmiyor.** Ghost Hit'te de sporcular refleksle başını çeviriyor, "
-      "geri çekiliyor ya da düşüyor; bu hareketler gerçek darbenin oluşturduğu dönüşe benziyor. "
-      "Darbe karesi hakem tarafından işaretlense bile ayırt edicilik artmadı (Bulgu 7).")
-    w("4. **Veri az.** 10 Real Hit ve 10 Ghost Hit klibiyle, %95 güven aralığı ±%20 civarında; "
-      "küçük bir gerçek etkinin bile ölçülmesi güç.\n")
+    w("1. **Temas anında iskelet noktaları en güvenilmez halinde.** Sporcular temas anında üst üste biniyor; "
+      "poz modeli yüksek tekmede kafaya uzanan bacağı çoğu zaman yakalayamıyor. Daha büyük poz modeli de bunu çözmedi.")
+    w("2. **İki boyutlu görüntüde \"başın hemen yanından geçen\" tekme ile \"başa değen\" tekme aynı görünüyor.** "
+      "Ghost Hit kliplerinde de tekme başa çok yakın geçiyor; ayak-baş mesafesi bu yüzden ayırt edici değil.")
+    w("3. **Başın tepkisi tek başına yetmiyor.** Ghost Hit'te de sporcular refleksle başını çeviriyor, geri "
+      "çekiliyor ya da düşüyor. Darbe karesi hakem tarafından işaretlense bile ayırt edicilik artmadı.")
+    w("4. **Veri az.** Kamuya açık bir veri seti olmadığı ve müsabaka görüntülerinin tamamı paylaşılmadığı için "
+      "küçük bir veriyle çalışıldı; küçük bir gerçek etkinin bile ölçülmesi güç.\n")
     w("---\n")
-    w("## 8. Doğruluğun geliştirme boyunca değişimi\n")
+    w("## 7. Doğruluğun geliştirme boyunca değişimi\n")
     if has_hist:
         w("![Doğruluk geçmişi](sonuc/dogruluk_gecmisi.png)\n")
-    w("Geliştirme sırasında ölçülen %45–%70 arasındaki değerler, kararın eşikleri veya modeli aynı 20 "
-      "klip üzerinde ayarlandığı için **iyimserdi**. Dürüst teste (birini dışarıda bırakarak) geçildiğinde "
-      f"doğruluk %{k_o / n_o * 100:.0f} çıktı. Bu fark, küçük veri setlerinde \"eğitildiği veride test "
-      "etme\" hatasının ne kadar yanıltıcı olabileceğini gösteriyor.\n")
+    w("Geliştirme sırasında ölçülen %45–%70 arasındaki değerler, kararın eşikleri veya modeli aynı klipler "
+      "üzerinde ayarlandığı için **iyimserdi**. Dürüst teste (birini dışarıda bırakarak) geçildiğinde doğruluk "
+      f"%{pct(k_o, n_o):.0f} çıktı. Bu fark, küçük veride \"eğitildiği veride test etme\" hatasının ne kadar "
+      "yanıltıcı olabileceğini gösteriyor.\n")
     w("---\n")
-    w("## 9. Sonuç ve sonraki adımlar\n")
-    w("- Sistem; video analizi, sporcu takibi, baş tepkisi ölçümü, kalibre güvenli karar, hakem girdileri "
-      "ve PDF raporu ile **uçtan uca çalışan bir karar destek altyapısı** olarak tamamlandı.")
-    w("- Mevcut 20 klipte, görüntüden çıkarılan ölçümler gerçek temas ile hayalet darbeyi **güvenilir "
-      "biçimde ayıramıyor**. Bu, dürüst ölçümle ortaya konmuş bir bulgudur.")
-    w("- **En önemli sonraki adım veri:** `Raw_Videos` klasöründeki 27 etiketlenmemiş olay etiketlenip "
-      "eklendiğinde `python egit.py` ve `python sonuc_raporu.py` ile model ve bu rapor kod değişmeden "
-      "yenilenebilir.")
-    w("- Uzun vadede: birden fazla kamera açısı (üç boyutlu konum), temas anı için daha yüksek kare hızı "
-      "ve dövüş sporlarına özel eğitilmiş poz modeli.")
+    w("## 8. Sonuç ve sonraki adımlar\n")
+    w("- Sistem; video analizi, sporcu takibi, baş tepkisi ölçümü, kalibre güvenli karar, hakem girdileri ve PDF "
+      "raporu ile **uçtan uca çalışan bir karar destek altyapısı** olarak tamamlandı.")
+    w("- Eldeki az veriyle, görüntüden çıkarılan ölçümler gerçek temas ile hayalet darbeyi **güvenilir biçimde "
+      "ayıramıyor**. Bu, dürüst ölçümle ortaya konmuş bir bulgudur.")
+    w("- **En önemli sonraki adım veri:** Daha fazla etiketli müsabaka görüntüsüne erişim sağlanırsa "
+      "`python egit.py` ve `python sonuc_raporu.py` ile model ve bu rapor kod değişmeden yenilenebilir.")
+    w("- Uzun vadede: birden fazla kamera açısı (üç boyutlu konum), temas anı için daha yüksek kare hızı ve dövüş "
+      "sporlarına özel eğitilmiş poz modeli.")
     w("")
 
     with open(OUT_MD, "w", encoding="utf-8") as f:
         f.write("\n".join(L))
 
-    print(f"Doğruluk (20 orijinal): {k_o}/{n_o}  %95 GA: %{lo * 100:.0f}-%{hi * 100:.0f}  "
-          f"şans p=%{p_chance * 100:.0f}")
-    print(f"Doğruluk (120): {k_a}/{n_a}")
-    print("Karmaşıklık (20):", used_cols, cm_o.tolist())
-    print("Karmaşıklık (120):", cm_a.tolist())
-    print("Yanlışlar:", [c["klip"] for c in wrong])
-    print("Varyantlar:", by_var)
-    print("AUC:", [(n, round(a, 2)) for n, _, _, a in feat_stats])
+    print(f"Doğruluk (orijinal): %{pct(k_o, n_o):.0f}  %95 GA: %{lo * 100:.0f}-%{hi * 100:.0f}  "
+          f"şans p=%{p_chance * 100:.0f}  (çoğaltılmışlar dahil %{pct(k_a, n_a):.0f})")
+    print(f"Ghost Hit yakalama %{gh_caught:.0f}, Real Hit onay %{rh_ok:.0f}")
     print(f"Rapor: {os.path.relpath(OUT_MD, PROJECT_ROOT)}  Grafikler: {os.path.relpath(OUT_DIR, PROJECT_ROOT)}/")
 
 

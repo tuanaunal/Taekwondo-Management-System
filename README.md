@@ -4,7 +4,7 @@ Taekwondo kurallarına göre rakibin kafasına yapılan geçerli her vuruş puan
 
 Bu proje, sensörden bağımsız olarak yalnızca müsabaka görüntüsünü analiz edip **kafaya gerçek bir temas olup olmadığını** değerlendiren bir **hakem karar destek sistemidir**. Sistem hakemin yerini almak için değil, ona saniyeler içinde ikinci bir görüş sunmak için tasarlanmıştır.
 
-> **Önemli:** Sistemin, hiç görmediği kliplerde ölçülen dürüst doğruluğu şu an **%55**'tir (20 klip, birini dışarıda bırakarak). Ayrıntılar ve nedenleri için [Sonuçlar ve sınırlar](#-sonuçlar-ve-sınırlar) bölümüne ve [YOL_HARITASI.md](YOL_HARITASI.md) dosyasına bakın.
+> **Önemli:** Sistemin, hiç görmediği kliplerde ölçülen dürüst doğruluğu şu an **%55**'tir (birini dışarıda bırakarak doğrulama). Ayrıntılar ve nedenleri için [Sonuçlar ve sınırlar](#-sonuçlar-ve-sınırlar) bölümüne ve [YOL_HARITASI.md](YOL_HARITASI.md) dosyasına bakın.
 
 ---
 
@@ -104,28 +104,28 @@ print(sonuc["decision_result"]["label_tr"], sonuc["decision_result"]["confidence
 
 | Komut | Ne yapar |
 |---|---|
-| `python degerlendir.py` | 20 orijinal klipte doğruluğu ölçer; `--tumu` ile 120 videonun tamamında, görüntü koşullarına göre dayanıklılıkla birlikte. Sonuçlar `output/reports/degerlendirme_gecmisi.csv` dosyasına eklenir. *Not: model bu videolarla eğitildiği için buradaki doğruluk iyimserdir; araç dürüst doğruluğu ayrıca yazar.* |
+| `python degerlendir.py` | Orijinal kliplerde doğruluğu ölçer; `--tumu` ile çoğaltılmış videolar dahil tamamında, görüntü koşullarına göre dayanıklılıkla birlikte. Sonuçlar `output/reports/degerlendirme_gecmisi.csv` dosyasına eklenir. *Not: model bu videolarla eğitildiği için buradaki doğruluk iyimserdir; araç dürüst doğruluğu ayrıca yazar.* |
 | `python egit.py` | Ölçümleri çıkarır (~10-15 dk), modeli **birini dışarıda bırakarak** değerlendirir, güven kalibrasyonunu hesaplar ve `model/karar_modeli.json` dosyasına kaydeder. `--onbellek` önceki ölçümleri kullanır. |
-| `python sonuc_raporu.py` | `egit.py`'nin ölçümlerinden dürüst sonuç raporunu (`SONUC_RAPORU.md`) ve grafiklerini (`sonuc/`) üretir: karmaşıklık matrisi, klip klip sonuçlar, hatalar. |
+| `python sonuc_raporu.py` | `egit.py`'nin ölçümlerinden dürüst sonuç raporunu (`SONUC_RAPORU.md`) ve grafiklerini (`sonuc/`) üretir: karmaşıklık matrisi, dayanıklılık, hatalar. |
 | `python -m pytest` | 26 otomatik test (~4 sn; YOLO ve video gerektirmez). |
 
 ---
 
 ## 📊 Sonuçlar ve sınırlar
 
-Veri seti: gerçek müsabaka kayıtlarından ayıklanıp etiketlenen **10 Real Hit ve 10 Ghost Hit klibi**; her biri görüntü işleme teknikleriyle 5 farklı koşulda çoğaltılmıştır (aynalama, parlaklık, karanlık, gürültü, bulanıklık; toplam 120 video).
+Veri seti: gerçek müsabaka kayıtlarından ayıklanıp etiketlenen **az sayıda Real Hit ve Ghost Hit klibi**; her biri görüntü işleme teknikleriyle 5 farklı koşulda çoğaltılmıştır (aynalama, parlaklık, karanlık, gürültü, bulanıklık). Bu alanda kamuya açık, etiketli bir veri seti bulunmuyor ve müsabaka görüntülerinin tamamı paylaşılmadığı için daha büyük bir veri seti oluşturulamadı.
 
 **Dürüst doğruluk** (her klip tüm kopyalarıyla bir kez dışarıda tutularak):
 
-| Ölçümler | 20 orijinal klip |
+| Ölçümler | Orijinal kliplerde doğruluk |
 |---|---|
-| Tüm ölçümler (kullanılan model) | **11/20 (%55)** |
-| Sadece baş dönüşü | 10/20 |
-| Sadece burun savrulması | 11/20 |
+| Tüm ölçümler (kullanılan model) | **%55** |
+| Sadece baş dönüşü | %50 |
+| Sadece burun savrulması | %55 |
 
-Karmaşıklık matrisi, klip klip sonuçlar ve hataların analizi: **[SONUC_RAPORU.md](SONUC_RAPORU.md)**
+Karmaşıklık matrisi, dayanıklılık ve hataların analizi: **[SONUC_RAPORU.md](SONUC_RAPORU.md)**
 
-![Karmaşıklık matrisi](sonuc/karmasiklik_matrisi_20.png)
+![Karmaşıklık matrisi](sonuc/karmasiklik_matrisi.png)
 
 **Temel bulgular** (ayrıntılar: [YOL_HARITASI.md](YOL_HARITASI.md)):
 
@@ -133,10 +133,10 @@ Karmaşıklık matrisi, klip klip sonuçlar ve hataların analizi: **[SONUC_RAPO
 2. **İskelet modeli yüksek tekmede kafaya uzanan bacağı yakalayamıyor;** daha büyük model de çözmedi.
 3. **İki boyutlu görüntüde temas, temassız geçişten ayırt edilemiyor:** Ghost Hit'te de tekme başın hemen yanından geçiyor.
 4. **Başın en yüksek ivmesi ayırt edici değil.**
-5. **Baş dönüşü en ayırt edici ölçüm** (20 klipte AUC %69), ancak bu eğilim görülmemiş kliplere genellenmiyor.
+5. **Baş dönüşü en ayırt edici ölçüm** (AUC %69), ancak bu eğilim görülmemiş kliplere genellenmiyor.
 6. **Darbe anı hakem tarafından işaretlense de** ayırt edicilik artmıyor; temas anında iskelet noktaları en güvenilmez halinde.
 
-**Sınırlar:** veri azlığı (10'a 10 klip), tek kameralı iki boyutlu yayın görüntüsü, temas anında üst üste binen sporcular. Sistem bu yüzden kararını her zaman **kalibre bir güven değeriyle** (şu an çoğunlukla "düşük") verir ve nihai kararı hakeme bırakır. Daha fazla etiketli veri, sistemin altyapısı değişmeden `python egit.py` ile modele eklenebilir.
+**Sınırlar:** veri azlığı, tek kameralı iki boyutlu yayın görüntüsü, temas anında üst üste binen sporcular. Sistem bu yüzden kararını her zaman **kalibre bir güven değeriyle** (şu an çoğunlukla "düşük") verir ve nihai kararı hakeme bırakır. Daha fazla etiketli veri, sistemin altyapısı değişmeden `python egit.py` ile modele eklenebilir.
 
 ---
 

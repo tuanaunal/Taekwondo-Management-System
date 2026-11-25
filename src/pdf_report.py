@@ -258,7 +258,7 @@ def create_pdf_report(result: dict, video_path: str, out_path: str) -> str:
         pdf.set_font(pdf.font_name, "", 8.5)
         pdf.set_text_color(73, 80, 87)
         pdf.multi_cell(0, 4.6, pdf.txt(
-            f"Karar modeli {model.get('egitim_video_sayisi', '-')} video ile eğitilmiştir. Her klip bir kez dışarıda "
+            "Karar modeli az sayıda etiketli müsabaka klibiyle eğitilmiştir. Her klip bir kez dışarıda "
             f"tutularak ölçülen dürüst doğruluğu {acc_txt}'dir; gösterilen güven, benzer kararların bu ölçümdeki "
             "gerçek doğruluk oranıdır. Tek kameralı iki boyutlu görüntüde temas ile temassız geçiş her zaman ayırt "
             "edilemez ve temas anında iskelet noktaları güvenilirliğini yitirebilir. Bu rapor hakeme ikinci bir "

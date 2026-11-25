@@ -153,7 +153,7 @@ class MainWindow(QMainWindow):
         if acc is not None:
             chip = QLabel(f"Görülmemiş kliplerde doğruluk  %{acc * 100:.0f}")
             chip.setToolTip("Her klip tüm kopyalarıyla bir kez dışarıda tutularak ölçüldü "
-                            "(birini dışarıda bırakarak doğrulama, 20 klip). Ayrıntı: SONUC_RAPORU.md")
+                            "(birini dışarıda bırakarak doğrulama). Ayrıntı: SONUC_RAPORU.md")
             chip.setStyleSheet(
                 f"background-color: {theme.SURFACE}; border: 1px solid {theme.BORDER}; border-radius: 14px;"
                 f" padding: 6px 14px; color: {theme.TEXT_2}; font-size: 11px; font-weight: 600;")

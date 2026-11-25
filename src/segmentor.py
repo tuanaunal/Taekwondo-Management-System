@@ -158,7 +158,7 @@ class EquipmentSegmentor:
             # guveni dusuk nokta (0, 0) yapilir ve _torso_color onu "yok" sayar.
             # Not: Bas ve ayak noktalari burada filtrelenmez. Dusuk guvenli bir noktayi atinca
             # yerine konacak bir sey olmadigi icin kafa/ayak o karede tamamen kayboluyordu
-            # (20 videoda 13 -> 10). Bu noktalarin guveni, yerine diger bas noktalarinin ve
+            # (dogruluk belirgin bicimde dustu). Bu noktalarin guveni, yerine diger bas noktalarinin ve
             # diz-ayak bilegi dogrultusunun kullanilabilecegi 8. ve 9. adimlarda kullanilacak.
             torso_pts = pts.copy()
             torso_pts[conf < KEYPOINT_CONF_THRESHOLD] = 0.0
@@ -433,7 +433,7 @@ class EquipmentSegmentor:
         # Olcum: gercek darbede burun, bas merkezinden belirgin sekilde fazla hareket ediyor
         # (Real Hit savrulma ortancasi: burun 140 px, bas merkezi 104 px; Ghost Hit'te ikisi ~100 px).
         # Sebep, darbenin basi dondurmesi: burun basin onunde oldugu icin donuste yay cizer.
-        # Bas merkezine gecmek bu bilgiyi siliyordu (20 videoda 12 -> 10). Bas donusu 14. adimda
+        # Bas merkezine gecmek bu bilgiyi siliyordu (dogruluk dustu). Bas donusu 14. adimda
         # ayri bir ozellik olarak eklenecek; bas merkezi ve yaricap 12. adimda temas icin kullanilacak.
         raw_red_helm = None
         raw_red_feet = []
