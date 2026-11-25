@@ -1,9 +1,13 @@
+import logging
+import os
+
 import cv2
 import numpy as np
-import logging
 from ultralytics import YOLO
 
-YOLO_MODEL_PATH = 'yolov8n-pose.pt'
+# Model dosyasının yolu proje klasörüne göre sabitlenir; program başka bir klasörden
+# çalıştırılsa da (ör. python C:\...\main.py) model bulunur.
+YOLO_MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "yolov8n-pose.pt")
 
 # Sporcu adayi olmak icin kutu alaninin, karedeki en buyuk kisinin kutu alanina orani.
 # Kameradan uzaktaki seyirci/antrenor gibi kucuk gorunen kisileri eler.
