@@ -69,6 +69,10 @@ Projenin geliştirme planı ve her adımın durumu. Her adım ayrı bir commit o
 | 25 | Otomatik testler *(25 test, ~4 sn; `python -m pytest`)* | ✅ | 48 |
 | 26 | README'yi yeniden yazmak *(Türkçe, kodla uyumlu, dürüst sonuçlar; model yolu sabitlendi)* | ✅ | 47, 49, 51 |
 | 27 | Sonuç raporu (doğruluk, karmaşıklık matrisi, hatalar) → [SONUC_RAPORU.md](SONUC_RAPORU.md) | ✅ | 50 |
+| | **7. Aşama – Konferans hazırlığı** *(yol haritasından sonra)* | | |
+| T | Temizlik: kullanılmayan 16 ayar (HSV aralıkları vb.), `yolov8n.pt`, `src/evaluator.py` ve `pandas` bağımlılığı kaldırıldı; eski proje adı açıklamalardan çıkarıldı | ✅ | 17, 18 |
+| A1 | Arayüz: ortak tema (`gui/theme.py`), yeni başlık ve dürüst doğruluk rozeti, numaralı sol panel, karar kartı (`gui/decision_card.py`: olasılık, kalibre güven, ölçüm katkıları) | ✅ | |
+| A2 | Arayüz: grafikler kararın dayandığı ölçümleri gösteriyor (kare kare baş dönüşü, ayak-baş uzaklığı), Türkçe kare tablosu, grafiğe tıklayınca kareye gitme; PDF grafikleri de aynı ölçümlere geçirildi *(26 test)* | ✅ | |
 
 ## Denenip vazgeçilenler
 

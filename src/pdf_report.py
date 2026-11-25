@@ -21,7 +21,8 @@ import numpy as np
 from fpdf import FPDF
 
 from gui.overlay import draw_frame_features
-from src.decision_engine import FEATURE_LABELS_TR, FEATURE_UNITS_TR, load_model
+from src.config import CONTACT_MARGIN_RADII, NEAR_MISS_MARGIN_RADII
+from src.decision_engine import CONTACT_GAP_CAP, FEATURE_LABELS_TR, FEATURE_UNITS_TR, load_model
 
 FONT_CANDIDATES = [
     (r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\arialbd.ttf"),
@@ -126,32 +127,58 @@ def _contact_frame_image(video_path: str, result: dict, path: str):
 
 
 def _graphs_image(result: dict, path: str):
-    """İvme ve ayak-baş mesafesi grafiklerini (temas anı işaretli) kaydeder."""
-    kin = result.get("kinematic_result", {})
-    contact = result.get("contact_summary", {})
-    moment = result.get("contact_moment", {}).get("frame")
-    fig, axes = plt.subplots(1, 2, figsize=(10, 2.2), dpi=110)
-    acc = np.asarray(kin.get("acceleration_profile", []), dtype=float)
-    if acc.size:
-        x = kin.get("profile_start_frame", 0) + np.arange(acc.size)
-        axes[0].plot(x, acc, color="#e94560", linewidth=1.4)
-        axes[0].fill_between(x, acc, alpha=0.2, color="#e94560")
-    axes[0].set_title("Baş ivmesi", fontsize=10)
-    axes[0].set_xlabel("Kare", fontsize=8)
-    axes[0].set_ylabel("ref. px/s²", fontsize=8)
-    dist = np.array([d if d < 1e6 else np.nan for d in contact.get("distance_profile", [])], dtype=float)
-    if dist.size:
-        axes[1].plot(np.arange(dist.size), dist / 26.0, color="#1f6feb", linewidth=1.4)
-    axes[1].set_title("Ayak - baş kenarı mesafesi", fontsize=10)
-    axes[1].set_xlabel("Kare", fontsize=8)
-    axes[1].set_ylabel("baş yarıçapı", fontsize=8)
+    """
+    Arayüzdeki grafiklerin aynısını (açık renkli, baskıya uygun) kaydeder:
+      - kare kare baş dönüşü (kırmızı / mavi sporcu) — kararın en etkili ölçümü
+      - en yakın ayağın rakip baş merkezine uzaklığı (baş yarıçapı), temas / yakın geçiş bölgeleriyle
+    Temas anı kesikli çizgi, hakemin işaretlediği kareler gölgeli alan olarak gösterilir.
+    """
+    frame_log = result.get("frame_log", [])
+    head = result.get("head_response", {}) or {}
+    moment = (result.get("contact_moment", {}) or {}).get("frame")
+    ranges = result.get("contact_ranges") or []
+    n = len(frame_log)
+    fig, axes = plt.subplots(1, 2, figsize=(10, 2.3), dpi=110)
     for ax in axes:
-        ax.grid(alpha=0.3)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        ax.grid(axis="y", alpha=0.3)
         ax.tick_params(labelsize=7)
+        for a, b in ranges:
+            ax.axvspan(a - 0.5, b + 0.5, color="#2a78d6", alpha=0.12, linewidth=0)
         if moment is not None:
-            ax.axvline(moment, color="#f1c40f", linewidth=1.5, label="temas anı")
-    if moment is not None:
-        axes[0].legend(fontsize=7)
+            ax.axvline(moment, color="#52514e", linewidth=1, linestyle=(0, (3, 3)))
+        ax.set_xlabel("Kare", fontsize=8)
+        ax.set_ylabel("baş yarıçapı", fontsize=8)
+        if n:
+            ax.set_xlim(-0.5, n - 0.5)
+
+    # Baş dönüşü
+    drawn = False
+    for color, line_color, name in (("red", "#e5484d", "Kırmızı"), ("blue", "#2a78d6", "Mavi")):
+        series = (head.get(color, {}) or {}).get("rotation_series") or []
+        y = np.array([np.nan if v is None else v for v in series[:n]], dtype=float)
+        if y.size and not np.isnan(y).all():
+            axes[0].plot(np.arange(y.size), y, color=line_color, linewidth=1.6, label=name)
+            drawn = True
+    axes[0].set_title("Baş dönüşü", fontsize=10, loc="left")
+    if drawn:
+        axes[0].set_ylim(bottom=0)
+        axes[0].legend(fontsize=7, frameon=False, ncol=2, loc="lower right", bbox_to_anchor=(1.0, 1.0), borderaxespad=0)
+
+    # Ayak-baş uzaklığı
+    cap = CONTACT_GAP_CAP
+    contact, near = 1.0 + CONTACT_MARGIN_RADII, 1.0 + NEAR_MISS_MARGIN_RADII
+    axes[1].axhspan(0, contact, color="#22c55e", alpha=0.18, linewidth=0, label="temas")
+    axes[1].axhspan(contact, near, color="#f59e0b", alpha=0.18, linewidth=0, label="yakın geçiş")
+    d = np.array([e.get("distance_radii", np.inf) for e in frame_log], dtype=float)
+    d[~np.isfinite(d)] = np.nan
+    if d.size and not np.isnan(d).all():
+        axes[1].plot(np.arange(d.size), np.minimum(d, cap), color="#0b0b0b", linewidth=1.4, marker="o",
+                     markersize=2)
+    axes[1].set_ylim(0, cap)
+    axes[1].set_title("En yakın ayağın rakip başa uzaklığı", fontsize=10, loc="left")
+    axes[1].legend(fontsize=7, frameon=False, ncol=2, loc="lower right", bbox_to_anchor=(1.0, 1.0), borderaxespad=0)
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
@@ -209,7 +236,7 @@ def create_pdf_report(result: dict, video_path: str, out_path: str) -> str:
             pdf.image(img_path, x=57, w=96)
         graph_path = os.path.join(tmp, "grafik.png")
         _graphs_image(result, graph_path)
-        pdf.section("Grafikler")
+        pdf.section("Grafikler (kesikli çizgi: temas anı, gölgeli alan: işaretlenen kareler)")
         pdf.image(graph_path, x=10, w=190)
 
         # ── Ölçümler ──

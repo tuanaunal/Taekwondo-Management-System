@@ -1,6 +1,6 @@
 """
-config.py — Taekwondo Ghost Hit Detection: Merkezi Konfigürasyon Modülü
-=======================================================================
+config.py — Taekwondo Hakem Karar Destek Sistemi: Merkezi Ayarlar
+=================================================================
 Projenin ortak ayarlarını (dosya yolları, ön işleme, kinematik ve temas
 eşikleri) tek bir noktadan yönetir. Modüle özel ayarlar kendi dosyalarında durur
 (ör. renk tespiti: segmentor.py, karar modeli: model/karar_modeli.json).

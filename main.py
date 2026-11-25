@@ -1,6 +1,6 @@
 """
-main.py — Taekwondo Ghost Hit Detection: Tek Giris Noktasi
-============================================================
+main.py — Taekwondo Hakem Karar Destek Sistemi: Tek Giris Noktasi
+=================================================================
 Projenin tek giris noktasidir.
 
 Kullanim:

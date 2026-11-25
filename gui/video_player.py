@@ -391,7 +391,7 @@ class VideoPlayerWidget(QWidget):
 
         frame = self.frames[idx].copy()
 
-        # Overlay göster
+        # Baş / ayak işaretlerini çiz
         if self.show_overlay and idx < len(self.frame_features):
             frame = draw_frame_features(frame, self.frame_features[idx], self.feature_scale,
                                         highlight=(idx == self.highlight_frame))

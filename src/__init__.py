@@ -1,1 +1,1 @@
-# Taekwondo Ghost Hit Detection - Source Package
+# Taekwondo Hakem Karar Destek Sistemi - analiz modülleri

@@ -1,1 +1,1 @@
-# Taekwondo Ghost Hit Detection - GUI Package
+# Taekwondo Hakem Karar Destek Sistemi - arayüz
